@@ -19,3 +19,4 @@
 *.keystore
 google-services.json
 offline_music/
+.idea/vcs.xml
