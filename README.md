@@ -95,6 +95,31 @@ Send a **ZIP** file containing MP3s via a POST request. The server extracts the 
 
 **Note:** Ensure MP3 files have valid ID3 tags and embedded cover art before uploading for the best experience.
 
+## OTA Updates (Auto-Updater)
+
+SpotiFly includes a built-in Over-The-Air update mechanism. You don't need to manually copy APKs to your phone.
+
+### How it works
+1.  **Check:** Every time the App opens, it queries `/update/check`.
+2.  **Compare:** It compares the server's `version.json` with the installed app version.
+3.  **Install:** If a newer version is found, it downloads and prompts the user to install it.
+
+### Deploying a new version
+A helper script `deploy_tool.py` is included to automate this process.
+
+1.  **Build:** Generate a Signed APK in Android Studio (`Build > Generate Signed Bundle / APK > APK > Debug/Release`).
+2.  **Run:** Execute the tool from the project root:
+    ```bash
+    python deploy_tool.py
+    ```
+3.  **Follow the wizard:**
+    * It detects the latest APK automatically.
+    * Enter the new Version Code (must be higher than current).
+    * Enter the Changelog.
+    * **Select Mode:**
+        * `[1] SSH/SCP`: For local network deployment (requires SSH access).
+        * `[2] HTTP Upload`: Deploys via the Cloudflare Tunnel. Useful if you are coding away from home.
+
 ## Disclaimer
 
 This project is a proof of concept regarding media streaming and network traversal. Users are responsible for ensuring they have the legal rights to the media files hosted, streamed, and downloaded on their private servers.
