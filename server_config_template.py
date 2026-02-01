@@ -10,6 +10,7 @@ API_SECRET_KEY = "CHANGE_THIS_TO_YOUR_REAL_SECRET_KEY"
 GMAIL_USER = "your_email@gmail.com"
 GMAIL_PASS = "your_app_password"
 DESTINATION_EMAIL = "destination_email@gmail.com"
+URL_CASA = "http://192.168.1.10:8000"
 
 # Port where the API will run locally
 PORT = 8000
