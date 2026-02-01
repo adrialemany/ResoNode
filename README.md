@@ -1,3 +1,5 @@
+<img src="./assets/icon.png" align="right" width="70" alt="Logo">
+
 # ResoNode
 
 **Self-hosted music streaming without barriers.**
