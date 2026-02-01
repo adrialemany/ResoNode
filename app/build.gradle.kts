@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.spotifly"
+    namespace = "com.example.resonode"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.spotifly"
+        applicationId = "com.example.resonode"
         minSdk = 19
         targetSdk = 34
         versionCode = 26

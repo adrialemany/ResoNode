@@ -1,4 +1,4 @@
-package com.example.spotifly;
+package com.example.resonode;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -59,9 +59,9 @@ import okhttp3.Response;
 
 public class MusicService extends Service implements AudioManager.OnAudioFocusChangeListener {
 
-    private static final String CHANNEL_ID = "SpotiflyChannel";
+    private static final String CHANNEL_ID = "ResoNodeChannel";
     private static final int NOTIFICATION_ID = 1;
-    private static final String PREFS_NAME = "SpotiflyState";
+    private static final String PREFS_NAME = "ResoNodeState";
 
     private MediaPlayer mediaPlayer;
     private MediaSessionCompat mediaSession;
@@ -156,7 +156,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                        .setContentTitle("SpotiFly")
+                        .setContentTitle("ResoNode")
                         .setContentText("Servicio activo")
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setPriority(NotificationCompat.PRIORITY_MIN)
@@ -533,7 +533,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "SpotiFly Player", NotificationManager.IMPORTANCE_LOW);
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "ResoNode Player", NotificationManager.IMPORTANCE_LOW);
             channel.setSound(null, null);
             getSystemService(NotificationManager.class).createNotificationChannel(channel);
         }
@@ -601,7 +601,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
                 .replaceAll("^(\\d+[\\s_\\-]*)+", "");
 
         String artistName = item.getArtist();
-        if (artistName == null || artistName.isEmpty()) artistName = "SpotiFly Music";
+        if (artistName == null || artistName.isEmpty()) artistName = "ResoNode Music";
 
         Intent openAppIntent = new Intent(this, MainActivity.class);
         openAppIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);

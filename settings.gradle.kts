@@ -15,5 +15,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SpotiFly"
+rootProject.name = "ResoNode"
 include(":app")

@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">SpotiFly</string>
+    <string name="app_name">ResoNode</string>
 
     <string name="navigation_drawer_open">Abrir menú lateral</string>
     <string name="navigation_drawer_close">Cerrar menú lateral</string>

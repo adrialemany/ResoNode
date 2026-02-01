@@ -1,4 +1,4 @@
-package com.example.spotifly;
+package com.example.resonode;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;

@@ -13,7 +13,7 @@
         android:id="@+id/tv_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="SpotiFly Login"
+        android:text="ResoNode Login"
         android:textSize="28sp"
         android:textStyle="bold"
         android:textColor="#1DB954"

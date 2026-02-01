@@ -1,11 +1,11 @@
-package com.example.spotifly;
+package com.example.resonode;
 
 import android.content.Context;
 import android.content.SharedPreferences;
 
 public class SessionManager {
     
-    private static final String PREF_NAME = "SpotiFlySession";
+    private static final String PREF_NAME = "ResoNodeSession";
     private static final String KEY_USERNAME = "username";
     private static final String KEY_IS_LOGGED_IN = "isLoggedIn";
 

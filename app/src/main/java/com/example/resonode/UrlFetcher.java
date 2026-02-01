@@ -1,4 +1,4 @@
-package com.example.spotifly;
+package com.example.resonode;
 
 import android.util.Log;
 import java.util.Properties;

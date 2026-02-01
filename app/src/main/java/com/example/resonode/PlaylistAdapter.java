@@ -1,4 +1,4 @@
-package com.example.spotifly;
+package com.example.resonode;
 
 import android.content.Context;
 import android.view.LayoutInflater;
@@ -103,7 +103,7 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
 
         String infoText = "";
         if (item.isFolder()) infoText = (mode == MODE_VAULT) ? (currentPath.isEmpty() ? "Artista" : "Album") : "Playlist";
-        else infoText = (item.getArtist() != null && !item.getArtist().isEmpty() && !item.getArtist().equals("SpotiFly")) ? item.getArtist() : "Canción";
+        else infoText = (item.getArtist() != null && !item.getArtist().isEmpty() && !item.getArtist().equals("ResoNode")) ? item.getArtist() : "Canción";
         holder.tvArtist.setText(infoText);
 
         

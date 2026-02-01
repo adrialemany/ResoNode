@@ -1,4 +1,4 @@
-package com.example.spotifly;
+package com.example.resonode;
 
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
@@ -407,7 +407,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void updateTitleAndFab(String path, boolean isVault) {
-        String title = path.isEmpty() ? "SpotiFly" : path;
+        String title = path.isEmpty() ? "ResoNode" : path;
         if (title.startsWith("General")) title = "Playlists Públicas";
         if (getSupportActionBar() != null) getSupportActionBar().setTitle(title);
         if (path.isEmpty()) fabAdd.show(); else fabAdd.hide();
@@ -450,7 +450,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         String artistName = song.getArtist();
         if (artistName == null || artistName.isEmpty()) {
             if (song.isFolder()) artistName = "Playlist";
-            else artistName = "SpotiFly Music";
+            else artistName = "ResoNode Music";
         }
 
         tvMiniTitle.setText(cleanTitle);
@@ -1139,7 +1139,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void checkAndShowChangelog(int version, String logText) {
-        android.content.SharedPreferences prefs = getSharedPreferences("SpotiflyPrefs", MODE_PRIVATE);
+        android.content.SharedPreferences prefs = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE);
         int lastSeenLogVersion = prefs.getInt("last_changelog_seen", 0);
         if (version > lastSeenLogVersion) {
             final int ver = version;
@@ -1149,7 +1149,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     .setCancelable(false)
                     .setPositiveButton("GENIAL", new DialogInterface.OnClickListener() {
                         @Override public void onClick(DialogInterface dialog, int which) {
-                            getSharedPreferences("SpotiflyPrefs", MODE_PRIVATE).edit().putInt("last_changelog_seen", ver).apply();
+                            getSharedPreferences("ResoNodePrefs", MODE_PRIVATE).edit().putInt("last_changelog_seen", ver).apply();
                             dialog.dismiss();
                         }
                     }).show();

@@ -23,7 +23,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="SpotiFly"
+            android:text="ResoNode"
             android:textColor="#FFFFFF"
             android:textSize="42sp"
             android:textStyle="bold"
