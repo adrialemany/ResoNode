@@ -16,7 +16,7 @@ Unlike other media servers like Plex or Jellyfin, ResoNode is built with a speci
     * **Streaming:** Plays directly from the server when an internet connection is available.
     * **Offline Mode:** Downloads playlists to local storage. The app manages the local database transparently, switching modes automatically when network connectivity is lost.
 * **The Vault:** An automated file system that organizes uploads by Artist, Album, and Track.
-* **Legacy Support:** Includes a custom TLS 1.2 socket factory implementation, allowing the client to run on older Android devices (Android 4.4+) as dedicated media players.
+* **Legacy Support:** Designed with a **lightweight interface** and a custom TLS 1.2 implementation, ensuring smooth performance even on older hardware (Android 4.4+) used as dedicated media players.
 
 ## System Architecture
 
