@@ -294,6 +294,30 @@ def get_cover(username: str, path: str):
             if os.path.exists(i_path): return FileResponse(i_path)
             
     return JSONResponse({}, 404)
+    
+@app.post("/system/upload_update")
+async def upload_update_remoto(apk_file: UploadFile = File(...), json_file: UploadFile = File(...)):
+    try:
+        # Clean old updates
+        if os.path.exists(UPDATE_DIR):
+            for f in os.listdir(UPDATE_DIR):
+                os.remove(os.path.join(UPDATE_DIR, f))
+        else:
+            os.makedirs(UPDATE_DIR)
+            
+        # Save APK
+        apk_path = os.path.join(UPDATE_DIR, apk_file.filename)
+        with open(apk_path, "wb") as buffer:
+            shutil.copyfileobj(apk_file.file, buffer)
+            
+        # Save Version JSON
+        json_path = os.path.join(UPDATE_DIR, "version.json")
+        with open(json_path, "wb") as buffer:
+            shutil.copyfileobj(json_file.file, buffer)
+            
+        return {"status": "ok", "msg": "Update deployed successfully"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 if __name__ == "__main__":
     import uvicorn
