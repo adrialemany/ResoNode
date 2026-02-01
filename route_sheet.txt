@@ -1,0 +1,7 @@
+compartir playlists
+apartado de busqueda por nombre
+mejorar busqueda por genero (la base)
+spotifly wrapped
+personalizar perfil
+amigos
+
