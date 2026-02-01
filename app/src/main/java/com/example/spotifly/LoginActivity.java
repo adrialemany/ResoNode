@@ -41,7 +41,6 @@ public class LoginActivity extends AppCompatActivity {
     private ProgressBar progressBar;
     private SessionManager session;
 
-    // Cliente HTTP Parcheado para Android 4.4
     private OkHttpClient createClient() {
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
                 .connectTimeout(10, TimeUnit.SECONDS)
@@ -69,9 +68,9 @@ public class LoginActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
 
-        // Ya no necesitamos inicializar nada de Google/Firebase
+        
 
-        // Buscar URL Servidor
+        
         UrlFetcher.fetchLatestUrl(new UrlFetcher.UrlCallback() {
             @Override
             public void onUrlFound(final String url) {
@@ -111,7 +110,7 @@ public class LoginActivity extends AppCompatActivity {
             @Override
             public void run() {
                 try {
-                    // 1. INTENTAR LOGIN
+                    
                     String loginUrl = Config.SERVER_URL + "/auth/login";
 
                     RequestBody body = new MultipartBody.Builder()
@@ -124,11 +123,11 @@ public class LoginActivity extends AppCompatActivity {
                     Response loginResponse = client.newCall(loginRequest).execute();
 
                     if (loginResponse.isSuccessful()) {
-                        // LOGIN CORRECTO
+                        
                         finishLogin(username);
                     }
                     else if (loginResponse.code() == 404) {
-                        // EL USUARIO NO EXISTE -> INTENTAR REGISTRO AUTOMÁTICO
+                        
                         attemptRegister(username, password);
                     }
                     else if (loginResponse.code() == 401) {
