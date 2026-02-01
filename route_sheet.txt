@@ -1,7 +1,6 @@
+quitar restos antiguo nombre en scripts python (no afecta funcionamiento)
 compartir playlists
-apartado de busqueda por nombre
-mejorar busqueda por genero (la base)
-spotifly wrapped
+resonode wrapped
 personalizar perfil
 amigos
 
