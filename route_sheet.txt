@@ -1,4 +1,5 @@
 quitar restos antiguo nombre en scripts python (no afecta funcionamiento)
+modernizar interfaz manteniendo mismo rendimiento en dispositivos antiguos
 compartir playlists
 resonode wrapped
 personalizar perfil
