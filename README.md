@@ -6,6 +6,15 @@
 
 ResoNode is a self-hosted music streaming platform designed to provide full control over a personal music library. It serves as an alternative to commercial streaming services, allowing users to host their own server and access their music remotely without subscriptions, ads, or data tracking.
 
+## User Interface
+
+<p align="center">
+  <img src="./assets/inici.jpg" width="22%" alt="Home Library">
+  <img src="./assets/side_pannel.png" width="22%" alt="Navigation Menu">
+  <img src="./assets/player.jpg" width="22%" alt="Music Player">
+  <img src="./assets/settings.jpg" width="22%" alt="Settings & Config">
+</p>
+
 ## Overview
 
 Unlike other media servers like Plex or Jellyfin, ResoNode is built with a specific focus on resilience and connection simplicity for users with dynamic IPs.
@@ -39,6 +48,8 @@ To bypass carrier-grade NAT (CGNAT) and dynamic IPs without user intervention:
 
 ## ResoNode Wrapped
 
+<img src="./assets/wrapped.png" align="right" width="220" alt="Wrapped Statistics">
+
 An integrated, privacy-focused analytics engine designed to track listening habits without third-party data mining. Unlike standard streaming services, this feature is built with a **local-first** philosophy.
 
 * **Offline-Persistent Tracking:** Playback history (duration and track counts) is recorded into an internal SQLite database. This ensures that statistics are captured even when using **Offline Mode** in areas with no connectivity.
@@ -47,6 +58,8 @@ An integrated, privacy-focused analytics engine designed to track listening habi
     * **OFF (Default):** The app simply does not record any data.
     * **Private Mode:** Statistics are strictly for personal viewing.
     * **Public Mode:** Users can opt-in to a server-wide leaderboard to compare listening times with other members of the instance.
+    
+<br clear="right"/>
 
 ## Server Installation
 
