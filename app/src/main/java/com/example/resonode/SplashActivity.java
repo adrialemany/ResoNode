@@ -30,7 +30,7 @@ public class SplashActivity extends AppCompatActivity {
             @Override
             public void onUrlFound(String url) {
                 
-                runOnUiThread(() -> ((android.widget.TextView)statusText).setText("Sincronizando..."));
+                runOnUiThread(() -> ((android.widget.TextView)statusText).setText("Sincronitzant..."));
 
                 Config.SERVER_URL = url;
                 navigateToNextScreen();
@@ -38,7 +38,7 @@ public class SplashActivity extends AppCompatActivity {
 
             @Override
             public void onError(Exception e) {
-                runOnUiThread(() -> ((android.widget.TextView)statusText).setText("Iniciando offline..."));
+                runOnUiThread(() -> ((android.widget.TextView)statusText).setText("Iniciant offline..."));
                 navigateToNextScreen();
             }
         });

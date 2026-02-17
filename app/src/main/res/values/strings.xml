@@ -4,4 +4,6 @@
     <string name="navigation_drawer_open">Abrir menú lateral</string>
     <string name="navigation_drawer_close">Cerrar menú lateral</string>
 
+    <string name="menu_settings">Configuració</string>
+
 </resources>

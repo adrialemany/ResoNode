@@ -77,7 +77,7 @@ public class LoginActivity extends AppCompatActivity {
                 Config.SERVER_URL = url;
                 runOnUiThread(new Runnable() {
                     @Override public void run() {
-                        if(!isFinishing()) Toast.makeText(LoginActivity.this, "Servidor conectado", Toast.LENGTH_SHORT).show();
+                        if(!isFinishing()) Toast.makeText(LoginActivity.this, "Servidor connectat", Toast.LENGTH_SHORT).show();
                     }
                 });
             }
@@ -101,8 +101,8 @@ public class LoginActivity extends AppCompatActivity {
         final String username = etUsername.getText().toString().trim();
         final String password = etPassword.getText().toString().trim();
 
-        if (TextUtils.isEmpty(username)) { etUsername.setError("Falta usuario"); return; }
-        if (TextUtils.isEmpty(password)) { etPassword.setError("Falta contraseña"); return; }
+        if (TextUtils.isEmpty(username)) { etUsername.setError("Falta usuari"); return; }
+        if (TextUtils.isEmpty(password)) { etPassword.setError("Falta contrassenya"); return; }
 
         setLoading(true);
 
@@ -110,31 +110,33 @@ public class LoginActivity extends AppCompatActivity {
             @Override
             public void run() {
                 try {
-                    
                     String loginUrl = Config.SERVER_URL + "/auth/login";
+
+                    String manufacturer = android.os.Build.MANUFACTURER;
+                    String model = android.os.Build.MODEL;
+                    String deviceName = manufacturer.substring(0, 1).toUpperCase() + manufacturer.substring(1) + " " + model;
 
                     RequestBody body = new MultipartBody.Builder()
                             .setType(MultipartBody.FORM)
                             .addFormDataPart("username", username)
                             .addFormDataPart("password", password)
+                            .addFormDataPart("device_model", deviceName)
                             .build();
 
                     Request loginRequest = new Request.Builder().url(loginUrl).post(body).build();
                     Response loginResponse = client.newCall(loginRequest).execute();
 
                     if (loginResponse.isSuccessful()) {
-                        
                         finishLogin(username);
                     }
                     else if (loginResponse.code() == 404) {
-                        
                         attemptRegister(username, password);
                     }
                     else if (loginResponse.code() == 401) {
-                        showError("Contraseña incorrecta");
+                        showError("Contrassenya incorrecta");
                     }
                     else if (loginResponse.code() == 403) {
-                        showError("Error de seguridad (Secret Key inválida)");
+                        showError("Error de seguretat (Secret Key invàlida)");
                     }
                     else {
                         showError("Error Servidor: " + loginResponse.code());
@@ -142,7 +144,7 @@ public class LoginActivity extends AppCompatActivity {
 
                 } catch (Exception e) {
                     e.printStackTrace();
-                    showError("Error conexión: " + e.getMessage());
+                    showError("Error connexió: " + e.getMessage());
                 }
             }
         });
@@ -163,15 +165,15 @@ public class LoginActivity extends AppCompatActivity {
 
             if (response.isSuccessful()) {
                 mainHandler.post(new Runnable() {
-                    @Override public void run() { Toast.makeText(LoginActivity.this, "¡Cuenta creada!", Toast.LENGTH_SHORT).show(); }
+                    @Override public void run() { Toast.makeText(LoginActivity.this, "Compte creat!", Toast.LENGTH_SHORT).show(); }
                 });
                 finishLogin(username);
             } else {
-                showError("No se pudo registrar: " + response.body().string());
+                showError("No s'ha pogut registrar: " + response.body().string());
             }
 
         } catch (Exception e) {
-            showError("Error registro: " + e.getMessage());
+            showError("Error registre: " + e.getMessage());
         }
     }
 
@@ -200,7 +202,7 @@ public class LoginActivity extends AppCompatActivity {
                 btnAction.setEnabled(!loading);
                 etUsername.setEnabled(!loading);
                 etPassword.setEnabled(!loading);
-                if (loading) btnAction.setText("Conectando...");
+                if (loading) btnAction.setText("Connectant...");
                 else btnAction.setText("ENTRAR / REGISTRAR");
             }
         });

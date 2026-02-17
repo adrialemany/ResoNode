@@ -3,15 +3,24 @@
     <group android:checkableBehavior="single">
         <item
             android:id="@+id/nav_home"
-            android:title="Inicio"
+            android:title="Inici"
             android:icon="@android:drawable/ic_menu_rotate" />
     </group>
 
-    <item android:title="Cuenta">
+    <item android:title="Compte">
         <menu>
             <item
+                android:id="@+id/nav_wrapped"
+                android:title="ResoNode Wrapped"
+                android:icon="@android:drawable/ic_menu_sort_by_size" />
+            <item
+                android:id="@+id/nav_settings"
+                android:title="@string/menu_settings"
+                android:icon="@android:drawable/ic_menu_preferences" />
+
+            <item
                 android:id="@+id/nav_logout"
-                android:title="Cerrar Sesión"
+                android:title="Tancar Sessió"
                 android:icon="@android:drawable/ic_lock_power_off" />
         </menu>
     </item>

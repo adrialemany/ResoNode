@@ -102,8 +102,8 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
         holder.tvName.setText(displayName);
 
         String infoText = "";
-        if (item.isFolder()) infoText = (mode == MODE_VAULT) ? (currentPath.isEmpty() ? "Artista" : "Album") : "Playlist";
-        else infoText = (item.getArtist() != null && !item.getArtist().isEmpty() && !item.getArtist().equals("ResoNode")) ? item.getArtist() : "Canción";
+        if (item.isFolder()) infoText = (mode == MODE_VAULT) ? (currentPath.isEmpty() ? "Artista" : "Àlbum") : "Playlist";
+        else infoText = (item.getArtist() != null && !item.getArtist().isEmpty() && !item.getArtist().equals("ResoNode")) ? item.getArtist() : "Cançó";
         holder.tvArtist.setText(infoText);
 
         
@@ -197,7 +197,7 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
         PopupMenu popup = new PopupMenu(context, view);
 
         if (mode == MODE_VAULT || mode == MODE_PRIVATE || mode == MODE_SEARCH) {
-            popup.getMenu().add("Añadir a Playlist");
+            popup.getMenu().add("Afegir a Playlist");
         }
 
         if (item.isFolder()) {
@@ -207,12 +207,12 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
             } catch (Exception e) {}
 
             if (isDownloaded) popup.getMenu().add("Borrar Offline");
-            else popup.getMenu().add("Descargar Offline");
+            else popup.getMenu().add("Descarregar Offline");
         }
 
         if (mode == MODE_PRIVATE) {
-            popup.getMenu().add("Cambiar Portada");
-            popup.getMenu().add("Renombrar");
+            popup.getMenu().add("Canviar Portada");
+            popup.getMenu().add("Reanomenar");
             popup.getMenu().add("Eliminar");
         }
 

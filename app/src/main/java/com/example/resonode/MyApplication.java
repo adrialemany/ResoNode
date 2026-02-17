@@ -25,8 +25,8 @@ public class MyApplication extends MultiDexApplication {
             @Override
             public void uncaughtException(Thread thread, Throwable e) {
                 Log.e("CRASH_REPORT", "------------------------------------------------");
-                Log.e("CRASH_REPORT", "🔥 ERROR FATAL DETECTADO 🔥");
-                Log.e("CRASH_REPORT", "Mensaje: " + e.getMessage());
+                Log.e("CRASH_REPORT", "🔥 ERROR FATAL DETECTAT 🔥");
+                Log.e("CRASH_REPORT", "Missatge: " + e.getMessage());
                 Log.getStackTraceString(e);
                 e.printStackTrace();
                 Log.e("CRASH_REPORT", "------------------------------------------------");

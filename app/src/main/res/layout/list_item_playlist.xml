@@ -14,7 +14,7 @@
         android:layout_height="wrap_content"
         android:textSize="18sp"
         android:textStyle="bold"
-        android:text="Nombre de la Playlist"
+        android:text="Nom de la Playlist"
         android:textColor="@android:color/white" />
 
 </LinearLayout>

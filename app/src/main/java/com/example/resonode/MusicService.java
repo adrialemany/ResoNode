@@ -70,6 +70,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
 
     private List<MusicItem> playlist = new ArrayList<>();
     private int currentIndex = -1;
+    private long songStartTime = 0;
     private String currentUsername = "";
     private boolean resumeOnFocusGain = false;
 
@@ -157,7 +158,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                         .setContentTitle("ResoNode")
-                        .setContentText("Servicio activo")
+                        .setContentText("Servei actiu")
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setPriority(NotificationCompat.PRIORITY_MIN)
                         .build();
@@ -176,6 +177,9 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
             public void onPrepared(MediaPlayer mp) {
                 failureCount = 0;
                 mp.start();
+
+                songStartTime = System.currentTimeMillis();
+
                 updateNotification();
                 saveState();
                 if (callback != null && currentIndex != -1 && currentIndex < playlist.size()) {
@@ -187,8 +191,17 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
 
         mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
             @Override public void onCompletion(MediaPlayer mp) {
-                
-                
+                long durationMs = System.currentTimeMillis() - songStartTime;
+                int seconds = (int) (durationMs / 1000);
+                MusicItem currentItem = getCurrentSong();
+
+                if (seconds > 30 && currentItem != null) {
+                    OfflineDB db = new OfflineDB(getApplicationContext());
+                    db.logPlay(currentItem.getName(), currentItem.getArtist(), seconds);
+
+                    syncHistory(getApplicationContext());
+                }
+
                 playNext();
             }
         });
@@ -196,7 +209,6 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
         mediaPlayer.setOnErrorListener(new MediaPlayer.OnErrorListener() {
             @Override
             public boolean onError(MediaPlayer mp, int what, int extra) {
-                
                 handlePlaybackError();
                 return true;
             }
@@ -211,7 +223,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
         } else {
             failureCount = 0;
             new Handler(Looper.getMainLooper()).post(new Runnable() {
-                @Override public void run() { Toast.makeText(getApplicationContext(), "Error reproducción", Toast.LENGTH_SHORT).show(); }
+                @Override public void run() { Toast.makeText(getApplicationContext(), "Error reproducció", Toast.LENGTH_SHORT).show(); }
             });
             if (callback != null) callback.onPlaybackStateChanged(false);
         }
@@ -664,5 +676,49 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
         if (mediaPlayer != null) { mediaPlayer.release(); mediaPlayer = null; }
         if (mediaSession != null) { mediaSession.release(); }
         if (tempFile != null && tempFile.exists()) { tempFile.delete(); }
+    }
+
+    public static void syncHistory(Context context) {
+        final OfflineDB db = new OfflineDB(context);
+        final List<JSONObject> unsynced = db.getUnsyncedPlays();
+        if (unsynced.isEmpty()) return;
+
+        new Thread(() -> {
+            try {
+                SessionManager session = new SessionManager(context);
+                if (!session.isWrappedEnabled()) return;
+
+                JSONObject json = new JSONObject();
+                json.put("username", session.getUsername());
+
+                JSONArray plays = new JSONArray();
+                List<Integer> idsToMark = new ArrayList<>();
+
+                for (JSONObject p : unsynced) {
+                    plays.put(p);
+                    idsToMark.add(p.getInt("id"));
+                }
+                json.put("plays", plays);
+
+                OkHttpClient client = new OkHttpClient();
+                okhttp3.RequestBody body = okhttp3.RequestBody.create(
+                        okhttp3.MediaType.parse("application/json; charset=utf-8"),
+                        json.toString()
+                );
+
+                Request request = new Request.Builder()
+                        .url(Config.SERVER_URL + "/stats/sync")
+                        .header("x-secret-key", Config.API_SECRET_KEY)
+                        .post(body)
+                        .build();
+
+                try (Response response = client.newCall(request).execute()) {
+                    if (response.isSuccessful()) {
+                        db.markAsSynced(idsToMark);
+                    }
+                }
+
+            } catch (Exception e) { e.printStackTrace(); }
+        }).start();
     }
 }
