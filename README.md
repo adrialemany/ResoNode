@@ -37,6 +37,17 @@ To bypass carrier-grade NAT (CGNAT) and dynamic IPs without user intervention:
 4.  **Discovery:** When the Android app launches, it checks the Gmail inbox via IMAP, retrieves the latest email from the server, and parses the new URL.
 5.  **Handshake:** The app updates its configuration and establishes the connection.
 
+## ResoNode Wrapped
+
+An integrated, privacy-focused analytics engine designed to track listening habits without third-party data mining. Unlike standard streaming services, this feature is built with a **local-first** philosophy.
+
+* **Offline-Persistent Tracking:** Playback history (duration and track counts) is recorded into an internal SQLite database. This ensures that statistics are captured even when using **Offline Mode** in areas with no connectivity.
+* **Smart Synchronization:** The app's `NetworkReceiver` detects when internet connectivity is restored and automatically pushes unsynced local logs to the server. This merges data from multiple devices into a single user profile.
+* **Privacy & Community:** The feature is strictly opt-in. Users have full control over their data visibility via Settings:
+    * **OFF (Default):** The app simply does not record any data.
+    * **Private Mode:** Statistics are strictly for personal viewing.
+    * **Public Mode:** Users can opt-in to a server-wide leaderboard to compare listening times with other members of the instance.
+
 ## Server Installation
 
 ### Prerequisites
