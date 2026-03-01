@@ -44,6 +44,20 @@
         android:indeterminate="true"
         android:visibility="gone"/>
 
+    <TextView
+        android:id="@+id/tv_default_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Artistes a la Bòveda"
+        android:textColor="#1DB954"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:paddingTop="16dp"
+        android:paddingBottom="8dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:visibility="gone" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recycler_search"
         android:layout_width="match_parent"

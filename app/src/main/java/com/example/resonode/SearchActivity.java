@@ -11,6 +11,7 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ProgressBar;
 import android.widget.Toast;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -41,6 +42,8 @@ public class SearchActivity extends AppCompatActivity {
     private RecyclerView recyclerSearch;
     private ProgressBar progressBar;
     private PlaylistAdapter adapter;
+
+    private TextView tvDefaultTitle;
     private List<MusicItem> searchResults = new ArrayList<>();
 
     private final OkHttpClient client = new OkHttpClient.Builder()
@@ -65,7 +68,7 @@ public class SearchActivity extends AppCompatActivity {
         btnBack = findViewById(R.id.btn_back);
         recyclerSearch = findViewById(R.id.recycler_search);
         progressBar = findViewById(R.id.progress_bar_search);
-
+        tvDefaultTitle = findViewById(R.id.tv_default_title);
         recyclerSearch.setLayoutManager(new LinearLayoutManager(this));
 
         adapter = new PlaylistAdapter(this, searchResults, PlaylistAdapter.MODE_SEARCH,
@@ -84,17 +87,21 @@ public class SearchActivity extends AppCompatActivity {
 
         btnBack.setOnClickListener(v -> finish());
 
-        etSearch.addTextChangedListener(new TextWatcher() {
-            private Runnable searchRunnable;
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+        fetchAllArtists();
+        tvDefaultTitle.setVisibility(View.VISIBLE);
 
-            @Override
-            public void afterTextChanged(Editable s) {
-                if (searchRunnable != null) mainHandler.removeCallbacks(searchRunnable);
-                searchRunnable = () -> performSearch(s.toString().trim());
-                mainHandler.postDelayed(searchRunnable, 600);
+        etSearch.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (s.toString().trim().isEmpty()) {
+                    tvDefaultTitle.setVisibility(View.VISIBLE);
+                    fetchAllArtists();
+                } else {
+                    tvDefaultTitle.setVisibility(View.GONE);
+                    performSearch(s.toString());
+                }
             }
+            @Override public void afterTextChanged(Editable s) {}
         });
     }
 
@@ -164,5 +171,58 @@ public class SearchActivity extends AppCompatActivity {
 
         setResult(RESULT_OK, resultIntent);
         finish();
+    }
+
+    private void fetchAllArtists() {
+        executor.execute(() -> {
+            try {
+                Request request = new Request.Builder()
+                        .url(Config.SERVER_URL + "/vault/artists")
+                        .header("x-secret-key", Config.API_SECRET_KEY)
+                        .get()
+                        .build();
+
+                Response response = client.newCall(request).execute();
+
+                if (response.isSuccessful()) {
+                    String jsonStr = response.body().string();
+                    JSONObject jsonObject = new JSONObject(jsonStr);
+
+                    if (jsonObject.has("results")) {
+                        JSONArray resultsArray = jsonObject.getJSONArray("results");
+
+                        runOnUiThread(() -> {
+                            searchResults.clear();
+                            for (int i = 0; i < resultsArray.length(); i++) {
+                                try {
+                                    JSONObject obj = resultsArray.getJSONObject(i);
+
+                                    String artista = obj.getString("title");
+                                    String itemPath = artista;
+
+                                    MusicItem item = new MusicItem(
+                                            artista,
+                                            "folder",
+                                            itemPath,
+                                            "Artista"
+                                    );
+                                    searchResults.add(item);
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                }
+                            }
+
+                            if (adapter != null) {
+                                adapter.setSelectionMode(false);
+                                adapter.setMode(PlaylistAdapter.MODE_PUBLIC);
+                                adapter.notifyDataSetChanged();
+                            }
+                        });
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
     }
 }

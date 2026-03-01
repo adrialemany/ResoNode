@@ -103,6 +103,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private MusicService musicService;
     private boolean isBound = false;
+    private boolean isRetryingConnection = false;
     private Handler seekBarHandler = new Handler();
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -272,6 +273,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             @Override public void run() {
                 if (swipeRefresh != null) swipeRefresh.setRefreshing(true);
                 tvStatus.setVisibility(View.GONE);
+                if (isRetryingConnection) {
+                    tvStatus.setText("Servidor reiniciat. Cercant nova adreça...");
+                    tvStatus.setVisibility(View.VISIBLE);
+                }
             }
         });
 
@@ -280,18 +285,20 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         try { tempEncodedPath = URLEncoder.encode(folderPath, "UTF-8"); } catch (Exception e) { tempEncodedPath = folderPath; }
         final String encodedPath = tempEncodedPath;
 
-        final String targetUrl = baseUrl + "/browse?username=" + username + "&folder=" + encodedPath;
+        final String currentTargetUrl = Config.SERVER_URL + "/browse?username=" + username + "&folder=" + encodedPath;
         final String currentFolderRequest = folderPath;
 
         executor.execute(new Runnable() {
             @Override
             public void run() {
                 try {
-                    Request request = new Request.Builder().url(targetUrl).build();
+                    Request request = new Request.Builder().url(currentTargetUrl).build();
                     Response response = client.newCall(request).execute();
 
                     if (response.code() == 403) throw new Exception("Clave Incorrecta");
                     if (!response.isSuccessful()) throw new Exception("Error " + response.code());
+
+                    isRetryingConnection = false;
 
                     JSONObject json = new JSONObject(response.body().string());
                     if (json.has("current_path")) currentPath = json.getString("current_path");
@@ -308,7 +315,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         String type = o.getString("type");
                         String path = o.getString("path");
                         String artist = o.optString("artist", "");
-
                         MusicItem item = new MusicItem(name, type, path, artist);
                         temp.add(item);
                         if (item.isFolder()) foundFolders = true;
@@ -323,39 +329,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                 if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
                                 musicList.clear();
                                 musicList.addAll(temp);
-
                                 updateTitleAndFab(currentPath, finalIsVault);
-
                                 if (adapter != null) adapter.setCurrentPath(currentPath);
-
-                                if (ivPlaylistHeader != null) {
-                                    if (currentPath.isEmpty()) {
-                                        ivPlaylistHeader.setVisibility(View.GONE);
-                                    } else {
-                                        ivPlaylistHeader.setVisibility(View.VISIBLE);
-                                        String headerUrl = "";
-                                        try {
-                                            String encodedHeaderPath = URLEncoder.encode(currentPath, "UTF-8");
-                                            headerUrl = Config.SERVER_URL + "/cover?username=" + session.getUsername() + "&path=" + encodedHeaderPath;
-                                        } catch (Exception e) {}
-
-                                        Glide.with(MainActivity.this)
-                                                .load(headerUrl)
-                                                .placeholder(R.mipmap.ic_launcher)
-                                                .error(R.mipmap.ic_launcher)
-                                                .circleCrop()
-                                                .into(ivPlaylistHeader);
-                                    }
-                                }
+                                    updateHeaderImage();
 
                                 if (currentPath.equals("General") || currentPath.startsWith("General/")) adapter.setMode(PlaylistAdapter.MODE_PUBLIC);
                                 else if (finalIsVault) adapter.setMode(PlaylistAdapter.MODE_VAULT);
                                 else adapter.setMode(PlaylistAdapter.MODE_PRIVATE);
 
                                 adapter.notifyDataSetChanged();
-
                             } catch (Throwable t) {
-                                android.util.Log.e("UI_ERROR", "Error pintant llista", t);
                                 tvStatus.setText("Error visual: " + t.getMessage());
                                 tvStatus.setVisibility(View.VISIBLE);
                             }
@@ -363,21 +346,100 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     });
 
                 } catch (final Exception e) {
-                    android.util.Log.e("Offline", "Fallo red, carregant offline: " + e.getMessage());
+                    e.printStackTrace();
+
                     mainHandler.post(new Runnable() {
                         @Override
                         public void run() {
-                            loadOfflineContent(currentFolderRequest);
-                            if (musicList.isEmpty()) {
-                                tvStatus.setText("Sense Connexió");
-                                tvStatus.setVisibility(View.VISIBLE);
-                                if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
+                            if (NetworkReceiver.isConnected(MainActivity.this)) {
+                                if (!isRetryingConnection) {
+                                    isRetryingConnection = true;
+                                    attemptServerRediscovery(folderPath);
+                                    return;
+                                }
                             }
+
+                            isRetryingConnection = false;
+                            android.util.Log.e("Offline", "Fallo red final, carregant offline: " + e.getMessage());
+
+                            loadOfflineContent(currentFolderRequest);
+
+                            String msg = NetworkReceiver.isConnected(MainActivity.this) ? "Error Servidor (Offline?)" : "Sense Connexió";
+                            tvStatus.setText(msg);
+                            tvStatus.setVisibility(View.VISIBLE);
+                            if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
                         }
                     });
                 }
             }
         });
+    }
+
+    private void updateHeaderImage() {
+        if (ivPlaylistHeader == null) return;
+
+        if (currentPath.isEmpty()) {
+            ivPlaylistHeader.setVisibility(View.GONE);
+        } else {
+            ivPlaylistHeader.setVisibility(View.VISIBLE);
+            String headerUrl = "";
+            try {
+                String encodedHeaderPath = URLEncoder.encode(currentPath, "UTF-8");
+                headerUrl = Config.SERVER_URL + "/cover?username=" + session.getUsername() + "&path=" + encodedHeaderPath;
+            } catch (Exception e) {}
+
+            Glide.with(MainActivity.this)
+                    .load(headerUrl)
+                    .placeholder(R.mipmap.ic_launcher)
+                    .error(R.mipmap.ic_launcher)
+                    .circleCrop()
+                    .into(ivPlaylistHeader);
+        }
+    }
+
+    private void attemptServerRediscovery(final String pendingFolderPath) {
+        ServerDiscovery.findServerUrl(new ServerDiscovery.DiscoveryCallback() {
+            @Override
+            public void onSuccess(final String newUrl) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (newUrl != null && !newUrl.isEmpty()) {
+                            Config.SERVER_URL = newUrl;
+
+                            getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
+                                    .edit()
+                                    .putString("last_server_url", newUrl)
+                                    .apply();
+
+                            Toast.makeText(MainActivity.this, "Servidor trobat! Reconnectant...", Toast.LENGTH_SHORT).show();
+
+                            fetchMusicContent(Config.SERVER_URL, pendingFolderPath);
+                        } else {
+                            handleDiscoveryFailure(pendingFolderPath);
+                        }
+                    }
+                });
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        handleDiscoveryFailure(pendingFolderPath);
+                    }
+                });
+            }
+        });
+    }
+
+    private void handleDiscoveryFailure(String folderPath) {
+        isRetryingConnection = false;
+        loadOfflineContent(folderPath);
+        tvStatus.setText("Servidor no disponible");
+        tvStatus.setVisibility(View.VISIBLE);
+        if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
     }
 
     private void loadOfflineContent(final String folderPath) {
@@ -1182,7 +1244,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (version > lastSeenLogVersion) {
             final int ver = version;
             new AlertDialog.Builder(this)
-                    .setTitle("¡Novedades v" + version + "!")
+                    .setTitle("¡Novetats v" + version + "!")
                     .setMessage(logText)
                     .setCancelable(false)
                     .setPositiveButton("GENIAL", new DialogInterface.OnClickListener() {
