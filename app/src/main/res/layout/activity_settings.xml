@@ -27,6 +27,113 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:text="RESONODE WRAPPED"
+                android:textColor="#F2B327"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.1"/>
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switch_wrapped"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Activar recopilació d'estadístiques"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:layout_marginTop="16dp"
+                app:thumbTint="#F2B327"
+                app:trackTint="#333333"/>
+
+            <RadioGroup
+                android:id="@+id/rg_privacy"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:layout_marginTop="8dp"
+                android:paddingStart="8dp">
+
+                <RadioButton
+                    android:id="@+id/rb_private"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Privat (Sols per a tu)"
+                    android:textColor="#DDDDDD"
+                    android:buttonTint="#F2B327"/>
+
+                <RadioButton
+                    android:id="@+id/rb_public"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Públic (Visible per altres usuaris)"
+                    android:textColor="#DDDDDD"
+                    android:buttonTint="#F2B327"/>
+            </RadioGroup>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#333333"
+                android:layout_marginTop="24dp"
+                android:layout_marginBottom="24dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PERSONALITZACIÓ DEL REPRODUCTOR"
+                android:textColor="#F2B327"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.1"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Estil del botó Play / Pause"
+                android:textColor="#AAAAAA"
+                android:layout_marginTop="16dp"/>
+            <Spinner
+                android:id="@+id/spinner_play_style"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="#F2B327" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Estil dels botons Anterior / Següent"
+                android:textColor="#AAAAAA"
+                android:layout_marginTop="16dp"/>
+            <Spinner
+                android:id="@+id/spinner_nav_style"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="#F2B327" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Color de les icones del reproductor"
+                android:textColor="#AAAAAA"
+                android:layout_marginTop="16dp"/>
+            <Spinner
+                android:id="@+id/spinner_icon_color"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="#F2B327" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#333333"
+                android:layout_marginTop="24dp"
+                android:layout_marginBottom="24dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:text="AQUEST DISPOSITIU"
                 android:textColor="#F2B327"
                 android:textSize="14sp"
@@ -139,58 +246,6 @@
                 android:paddingTop="12dp"
                 android:paddingBottom="12dp"
                 android:background="?attr/selectableItemBackground"/>
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#333333"
-                android:layout_marginTop="24dp"
-                android:layout_marginBottom="24dp"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="RESONODE WRAPPED"
-                android:textColor="#F2B327"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:letterSpacing="0.1"/>
-
-            <androidx.appcompat.widget.SwitchCompat
-                android:id="@+id/switch_wrapped"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Activar recopilació d'estadístiques"
-                android:textColor="#FFFFFF"
-                android:textSize="16sp"
-                android:layout_marginTop="16dp"
-                app:thumbTint="#F2B327"
-                app:trackTint="#333333"/>
-
-            <RadioGroup
-                android:id="@+id/rg_privacy"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:visibility="gone"
-                android:layout_marginTop="8dp"
-                android:paddingStart="8dp">
-
-                <RadioButton
-                    android:id="@+id/rb_private"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Privat (Sols per a tu)"
-                    android:textColor="#DDDDDD"
-                    android:buttonTint="#F2B327"/>
-
-                <RadioButton
-                    android:id="@+id/rb_public"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Públic (Visible per altres usuaris)"
-                    android:textColor="#DDDDDD"
-                    android:buttonTint="#F2B327"/>
-            </RadioGroup>
 
             <View
                 android:layout_width="match_parent"

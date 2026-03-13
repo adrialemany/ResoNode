@@ -35,6 +35,11 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
+import android.content.SharedPreferences;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
+import android.widget.AdapterView;
+
 public class SettingsActivity extends AppCompatActivity {
 
     private TextView tvDeviceInfo;
@@ -77,6 +82,60 @@ public class SettingsActivity extends AppCompatActivity {
         tvStorageUsed = findViewById(R.id.tv_storage_used);
         btnClearMusic = findViewById(R.id.btn_clear_music);
         btnOpenEq = findViewById(R.id.btn_open_eq);
+
+        SharedPreferences prefs = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE);
+
+        Spinner spinPlay = findViewById(R.id.spinner_play_style);
+        Spinner spinNav = findViewById(R.id.spinner_nav_style);
+        Spinner spinColor = findViewById(R.id.spinner_icon_color);
+
+        final String[] stylesDisplay = {"Visor Tàctic Kiroshi (HUD)", "Maquinària Industrial (Hex)", "Dades Corruptes (Glitch)", "Clàssic (Material)"};
+        final String[] stylesKeys = {"hud", "hex", "glitch", "original"};
+
+        final String[] colorsDisplay = {"ResoNode (Groc Daurat)", "Groc Night City", "Roig Arasaka", "Blanc (Clàssic)", "Verd (SpotiFly)", "Cian (Elèctric)"};
+        final String[] colorsKeys = {"resonode", "cyber_yellow", "cyber_red", "white", "green", "cyan"};
+
+        ArrayAdapter<String> adapterStyles = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, stylesDisplay);
+        adapterStyles.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinPlay.setAdapter(adapterStyles);
+        spinNav.setAdapter(adapterStyles);
+
+        ArrayAdapter<String> adapterColors = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, colorsDisplay);
+        adapterColors.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinColor.setAdapter(adapterColors);
+
+        // Llegir les configuracions guardades actualment
+        String currentPlay = prefs.getString("play_style", "hud");
+        String currentNav = prefs.getString("nav_style", "hud");
+        String currentColor = prefs.getString("icon_color", "resonode");
+
+        for (int i=0; i<stylesKeys.length; i++) {
+            if (stylesKeys[i].equals(currentPlay)) spinPlay.setSelection(i);
+            if (stylesKeys[i].equals(currentNav)) spinNav.setSelection(i);
+        }
+        for (int i=0; i<colorsKeys.length; i++) {
+            if (colorsKeys[i].equals(currentColor)) spinColor.setSelection(i);
+        }
+
+        // Escoltar quan l'usuari canvia qualsevol dropdown i guardar-ho
+        AdapterView.OnItemSelectedListener spinnerListener = new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                // Per a evitar que el text negre del dropdown no es veja bé sobre fons negre:
+                if (view != null && view instanceof TextView) ((TextView) view).setTextColor(0xFFFFFFFF);
+
+                SharedPreferences.Editor editor = prefs.edit();
+                if (parent == spinPlay) editor.putString("play_style", stylesKeys[position]);
+                else if (parent == spinNav) editor.putString("nav_style", stylesKeys[position]);
+                else if (parent == spinColor) editor.putString("icon_color", colorsKeys[position]);
+                editor.apply();
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) {}
+        };
+
+        spinPlay.setOnItemSelectedListener(spinnerListener);
+        spinNav.setOnItemSelectedListener(spinnerListener);
+        spinColor.setOnItemSelectedListener(spinnerListener);
 
         switchWrapped = findViewById(R.id.switch_wrapped);
         rgPrivacy = findViewById(R.id.rg_privacy);

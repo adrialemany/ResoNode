@@ -35,3 +35,4 @@ updates/
 *.log
 nohup.out
 downloads_temp/
+app/src/main/java/com/example/resonode/Config.java 

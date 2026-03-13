@@ -6,100 +6,114 @@
     android:id="@+id/drawer_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fitsSystemWindows="true">
+    android:fitsSystemWindows="true"> <FrameLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#121212">
 
-    <FrameLayout
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#121212">
+        android:fitsSystemWindows="true">
 
-        <RelativeLayout
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
-
-            <androidx.appcompat.widget.Toolbar
-                android:id="@+id/toolbar"
+            android:layout_height="?attr/actionBarSize"
+            android:background="#121212"
+            app:popupTheme="@style/ThemeOverlay.AppCompat.Light">
+            <RelativeLayout
                 android:layout_width="match_parent"
-                android:layout_height="?attr/actionBarSize"
-                android:background="#F2B327"
-                android:elevation="4dp"
-                android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
-                app:popupTheme="@style/ThemeOverlay.AppCompat.Light">
-
+                android:layout_height="match_parent">
+                <TextView
+                    android:id="@+id/tv_custom_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_centerVertical="true"
+                    android:text="RESONODE"
+                    android:textColor="#F2B327"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.15"
+                    android:fontFamily="@font/cyber_font" />
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="match_parent"
-                    android:layout_gravity="end"
+                    android:layout_alignParentEnd="true"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
-
                     <ImageButton
                         android:id="@+id/btn_search"
                         android:layout_width="48dp"
                         android:layout_height="48dp"
                         app:srcCompat="@android:drawable/ic_menu_search"
                         android:background="?attr/selectableItemBackgroundBorderless"
-                        app:tint="#FFFFFF"
-                        android:contentDescription="Buscar" />
-
+                        app:tint="#FFFFFF" />
                     <TextView
                         android:id="@+id/tv_toolbar_action"
                         android:layout_width="wrap_content"
                         android:layout_height="match_parent"
                         android:gravity="center_vertical"
                         android:paddingEnd="16dp"
-                        android:paddingRight="16dp"
                         android:text="AFEGIR"
-                        android:textColor="#FFFFFF"
-                        android:textSize="14sp"
+                        android:textColor="#F2B327"
+                        android:textSize="12sp"
                         android:textStyle="bold"
                         android:visibility="gone"/>
                 </LinearLayout>
-            </androidx.appcompat.widget.Toolbar>
+            </RelativeLayout>
+        </androidx.appcompat.widget.Toolbar>
+
+            <View
+                android:id="@+id/separator"
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_below="@id/toolbar"
+                android:background="#33F2B327" />
 
             <androidx.coordinatorlayout.widget.CoordinatorLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:layout_above="@id/mini_player_layout"
-                android:layout_below="@id/toolbar">
+                android:layout_below="@id/separator">
 
                 <com.google.android.material.appbar.AppBarLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:background="@android:color/transparent"
                     app:elevation="0dp">
-
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        app:layout_scrollFlags="scroll">
-
+                        android:orientation="vertical">
                         <TextView
                             android:id="@+id/tv_status"
-                            android:layout_width="match_parent"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:background="#B00020"
-                            android:gravity="center"
-                            android:padding="10dp"
-                            android:text="Connectant..."
+                            android:layout_gravity="center_horizontal"
+                            android:layout_marginTop="8dp"
+                            android:background="@drawable/bg_status_pill"
+                            android:paddingHorizontal="12dp"
+                            android:paddingVertical="4dp"
                             android:textColor="#FFFFFF"
-                            android:textStyle="bold"
                             android:visibility="gone" />
 
-                        <ImageView
-                            android:id="@+id/iv_playlist_header"
-                            android:layout_width="200dp"
-                            android:layout_height="200dp"
+                        <com.google.android.material.card.MaterialCardView
+                            android:id="@+id/card_header"
+                            android:layout_width="180dp"
+                            android:layout_height="180dp"
                             android:layout_gravity="center_horizontal"
-                            android:layout_marginTop="24dp"
+                            android:layout_marginTop="20dp"
                             android:layout_marginBottom="16dp"
-                            app:srcCompat="@mipmap/ic_launcher"
-                            android:scaleType="centerCrop"
-                            android:background="#333333"
-                            android:visibility="gone"/>
+                            app:cardCornerRadius="16dp"
+                            app:cardElevation="4dp"
+                            android:visibility="gone">
+                            <ImageView
+                                android:id="@+id/iv_playlist_header"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:scaleType="centerCrop" />
+                        </com.google.android.material.card.MaterialCardView>
                     </LinearLayout>
-
                 </com.google.android.material.appbar.AppBarLayout>
 
                 <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -107,14 +121,13 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     app:layout_behavior="@string/appbar_scrolling_view_behavior">
-
                     <androidx.recyclerview.widget.RecyclerView
                         android:id="@+id/recycler_view_playlists"
                         android:layout_width="match_parent"
-                        android:layout_height="match_parent" />
-
+                        android:layout_height="match_parent"
+                        android:paddingBottom="100dp"
+                        android:clipToPadding="false" />
                 </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
-
             </androidx.coordinatorlayout.widget.CoordinatorLayout>
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -122,69 +135,56 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_alignParentEnd="true"
-                android:layout_alignParentRight="true"
                 android:layout_alignParentBottom="true"
-                android:layout_marginRight="24dp"
-                android:layout_marginEnd="24dp"
-                android:layout_marginBottom="100dp"
+                android:layout_marginEnd="20dp"
+                android:layout_marginBottom="110dp"
                 app:srcCompat="@android:drawable/ic_input_add"
                 app:backgroundTint="#F2B327"
-                app:tint="#FFFFFF" />
+                app:tint="#121212" />
 
-            <LinearLayout
+            <com.google.android.material.card.MaterialCardView
                 android:id="@+id/mini_player_layout"
                 android:layout_width="match_parent"
-                android:layout_height="60dp"
+                android:layout_height="70dp"
                 android:layout_alignParentBottom="true"
-                android:background="#282828"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:padding="5dp"
+                android:layout_marginHorizontal="20dp"
+                android:layout_marginBottom="20dp"
+                app:cardBackgroundColor="#222222"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="12dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="#33F2B327"
                 android:visibility="gone"
                 android:clickable="true">
-
-                <ImageView
-                    android:id="@+id/iv_mini_cover"
-                    android:layout_width="50dp"
-                    android:layout_height="50dp"
-                    app:srcCompat="@mipmap/ic_launcher"
-                    android:scaleType="centerCrop"
-                    android:layout_marginEnd="8dp"/>
-
                 <LinearLayout
-                    android:layout_width="0dp"
+                    android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
+                    android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:paddingStart="2dp"
-                    android:paddingLeft="2dp">
-                    <TextView
-                        android:id="@+id/tv_mini_title"
-                        android:layout_width="wrap_content"
+                    android:padding="8dp">
+                    <com.google.android.material.card.MaterialCardView
+                        android:layout_width="54dp"
+                        android:layout_height="54dp"
+                        app:cardCornerRadius="8dp"
+                        app:cardElevation="0dp">
+                        <ImageView
+                            android:id="@+id/iv_mini_cover"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:scaleType="centerCrop" />
+                    </com.google.android.material.card.MaterialCardView>
+                    <LinearLayout
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:text="Títol"
-                        android:textColor="#FFFFFF"
-                        android:textStyle="bold"
-                        android:singleLine="true"/>
-                    <TextView
-                        android:id="@+id/tv_mini_artist"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Estat"
-                        android:textColor="#AAAAAA"
-                        android:textSize="12sp"
-                        android:singleLine="true"/>
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:layout_marginStart="12dp">
+                        <TextView android:id="@+id/tv_mini_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFFFFF" android:textStyle="bold" android:singleLine="true"/>
+                        <TextView android:id="@+id/tv_mini_artist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#AAAAAA" android:textSize="11sp" android:singleLine="true"/>
+                    </LinearLayout>
+                    <ImageButton android:id="@+id/btn_mini_play" android:layout_width="48dp" android:layout_height="48dp" android:background="?attr/selectableItemBackgroundBorderless" android:scaleType="centerInside"/>
                 </LinearLayout>
-
-                <ImageButton
-                    android:id="@+id/btn_mini_play"
-                    android:layout_width="50dp"
-                    android:layout_height="50dp"
-                    app:srcCompat="@android:drawable/ic_media_play"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    app:tint="#FFFFFF"/>
-            </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
         </RelativeLayout>
 
         <LinearLayout
@@ -193,124 +193,43 @@
             android:layout_height="match_parent"
             android:background="#121212"
             android:orientation="vertical"
-            android:padding="16dp"
-            android:gravity="center_horizontal"
+            android:padding="24dp"
             android:visibility="gone"
             android:clickable="true">
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="start">
-                <ImageButton
-                    android:id="@+id/btn_close_player"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    app:srcCompat="@android:drawable/arrow_down_float"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    app:tint="#FFFFFF"
-                    android:scaleType="centerInside"/>
-            </LinearLayout>
+            <ImageButton android:id="@+id/btn_close_player" android:layout_width="48dp" android:layout_height="48dp" android:rotation="90" android:background="?attr/selectableItemBackgroundBorderless" android:scaleType="centerInside" android:layout_gravity="start"/>
 
-            <ImageView
-                android:id="@+id/iv_full_cover"
+            <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_weight="1"
-                app:srcCompat="@mipmap/ic_launcher"
-                android:scaleType="fitCenter"
-                android:background="@android:color/transparent"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="16dp"/>
+                android:layout_marginVertical="24dp"
+                app:cardCornerRadius="24dp"
+                app:cardBackgroundColor="#000000"
+                app:cardElevation="8dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="#22FFFFFF">
 
-            <TextView
-                android:id="@+id/tv_full_title"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Cançó"
-                android:textColor="#FFFFFF"
-                android:textSize="22sp"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:maxLines="1"
-                android:ellipsize="end"
-                android:layout_marginBottom="4dp"/>
+                <com.google.android.material.imageview.ShapeableImageView
+                    android:id="@+id/iv_full_cover"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop"
+                    app:srcCompat="@mipmap/ic_launcher" />
+            </com.google.android.material.card.MaterialCardView>
 
-            <TextView
-                android:id="@+id/tv_full_artist"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Artista"
-                android:textColor="#AAAAAA"
-                android:textSize="16sp"
-                android:gravity="center"
-                android:maxLines="1"
-                android:ellipsize="end"
-                android:layout_marginBottom="24dp"/>
-
-            <SeekBar
-                android:id="@+id/seek_bar"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"/>
-
-            <RelativeLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp">
-                <TextView
-                    android:id="@+id/tv_current_time"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="0:00"
-                    android:textColor="#AAAAAA"
-                    android:layout_alignParentLeft="true"
-                    android:layout_alignParentStart="true"/>
-                <TextView
-                    android:id="@+id/tv_total_time"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="0:00"
-                    android:textColor="#AAAAAA"
-                    android:layout_alignParentRight="true"
-                    android:layout_alignParentEnd="true"/>
+            <TextView android:id="@+id/tv_full_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFFFFF" android:textSize="22sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end"/>
+            <TextView android:id="@+id/tv_full_artist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#AAAAAA" android:textSize="16sp" android:layout_marginBottom="24dp"/>
+            <SeekBar android:id="@+id/seek_bar" android:layout_width="match_parent" android:layout_height="wrap_content"/>
+            <RelativeLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp">
+                <TextView android:id="@+id/tv_current_time" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#80FFFFFF" android:layout_alignParentStart="true"/>
+                <TextView android:id="@+id/tv_total_time" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#80FFFFFF" android:layout_alignParentEnd="true"/>
             </RelativeLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center"
-                android:layout_marginBottom="16dp">
-
-                <ImageButton
-                    android:id="@+id/btn_prev"
-                    android:layout_width="60dp"
-                    android:layout_height="60dp"
-                    app:srcCompat="@android:drawable/ic_media_previous"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    app:tint="#FFFFFF"/>
-
-                <ImageButton
-                    android:id="@+id/btn_full_play"
-                    android:layout_width="80dp"
-                    android:layout_height="80dp"
-                    app:srcCompat="@android:drawable/ic_media_play"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:scaleType="fitCenter"
-                    app:tint="#FFFFFF"
-                    android:layout_marginLeft="20dp"
-                    android:layout_marginRight="20dp"
-                    android:layout_marginStart="20dp"
-                    android:layout_marginEnd="20dp"/>
-
-                <ImageButton
-                    android:id="@+id/btn_next"
-                    android:layout_width="60dp"
-                    android:layout_height="60dp"
-                    app:srcCompat="@android:drawable/ic_media_next"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    app:tint="#FFFFFF"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center">
+                <ImageButton android:id="@+id/btn_prev" android:layout_width="60dp" android:layout_height="60dp" android:background="?attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" android:padding="12dp"/>
+                <ImageButton android:id="@+id/btn_full_play" android:layout_width="80dp" android:layout_height="80dp" android:background="?attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" android:layout_marginHorizontal="20dp"/>
+                <ImageButton android:id="@+id/btn_next" android:layout_width="60dp" android:layout_height="60dp" android:background="?attr/selectableItemBackgroundBorderless" android:scaleType="fitCenter" android:padding="12dp"/>
             </LinearLayout>
-
         </LinearLayout>
     </FrameLayout>
 
@@ -320,6 +239,8 @@
         android:layout_height="match_parent"
         android:layout_gravity="start"
         app:headerLayout="@layout/nav_header"
-        app:menu="@menu/drawer_menu"/>
-
+        app:menu="@menu/drawer_menu"
+        android:background="#121212"
+        app:itemTextColor="#FFFFFF"
+        app:itemIconTint="#F2B327"/>
 </androidx.drawerlayout.widget.DrawerLayout>

@@ -2,4 +2,7 @@
     <style name="Base.Theme.ResoNode" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:statusBarColor">#000000</item>
     </style>
+    <style name="RoundedSquare">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">8dp</item> </style>
 </resources>

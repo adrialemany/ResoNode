@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.net.Uri;
 import android.os.Build;
@@ -81,6 +82,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private DrawerLayout drawerLayout;
+
+    private int playIconRes = android.R.drawable.ic_media_play;
+    private int pauseIconRes = android.R.drawable.ic_media_pause;
     private NetworkReceiver networkReceiver;
     private RecyclerView recyclerView;
     private TextView tvStatus, tvToolbarAction;
@@ -89,7 +93,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private SwipeRefreshLayout swipeRefresh;
     private ImageView ivPlaylistHeader;
 
-    private LinearLayout miniPlayerLayout, fullPlayerLayout;
+    private View miniPlayerLayout;
+    private LinearLayout fullPlayerLayout;
     private TextView tvMiniTitle, tvMiniArtist, tvFullTitle, tvFullArtist, tvCurrentTime, tvTotalTime;
     private ImageButton btnMiniPlay, btnFullPlay, btnNext, btnPrev, btnClosePlayer;
     private SeekBar seekBar;
@@ -162,14 +167,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 }
                 @Override public void onPlaybackStateChanged(final boolean isPlaying) {
                     mainHandler.post(new Runnable() {
-                        @Override public void run() { updatePlayIcons(isPlaying ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play); }
+                        // CANVI CLAU ACÍ:
+                        @Override public void run() { updatePlayIcons(isPlaying); }
                     });
                 }
             });
             MusicItem savedSong = musicService.getCurrentSong();
             if (savedSong != null) {
                 updatePlayerUI(savedSong, musicService.isPlaying());
-                if (!musicService.isPlaying()) updatePlayIcons(android.R.drawable.ic_media_play);
+                // CANVI CLAU ACÍ:
+                if (!musicService.isPlaying()) updatePlayIcons(false);
                 fullPlayerLayout.setVisibility(View.GONE);
             }
         }
@@ -247,6 +254,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         setupUI();
         setupPlayer();
+        updatePlayerIcons();
 
         Intent intent = new Intent(this, MusicService.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -376,23 +384,27 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void updateHeaderImage() {
-        if (ivPlaylistHeader == null) return;
+        // Busquem el CardView que envolta la imatge de la playlist
+        View cardHeader = findViewById(R.id.card_header);
+        if (ivPlaylistHeader == null || cardHeader == null) return;
 
-        if (currentPath.isEmpty()) {
-            ivPlaylistHeader.setVisibility(View.GONE);
+        // Si estem a l'arrel o en llistes públiques, amaguem el bloc de la portada
+        if (currentPath.isEmpty() || currentPath.equals("General")) {
+            cardHeader.setVisibility(View.GONE);
         } else {
-            ivPlaylistHeader.setVisibility(View.VISIBLE);
+            // Si estem dins d'una playlist, el fem visible i carreguem la imatge
+            cardHeader.setVisibility(View.VISIBLE);
             String headerUrl = "";
             try {
                 String encodedHeaderPath = URLEncoder.encode(currentPath, "UTF-8");
                 headerUrl = Config.SERVER_URL + "/cover?username=" + session.getUsername() + "&path=" + encodedHeaderPath;
             } catch (Exception e) {}
 
-            Glide.with(MainActivity.this)
+            Glide.with(this)
                     .load(headerUrl)
                     .placeholder(R.mipmap.ic_launcher)
                     .error(R.mipmap.ic_launcher)
-                    .circleCrop()
+                    .centerCrop()
                     .into(ivPlaylistHeader);
         }
     }
@@ -479,10 +491,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void updateTitleAndFab(String path, boolean isVault) {
-        String title = path.isEmpty() ? "ResoNode" : path;
-        if (title.startsWith("General")) title = "Playlists Públiques";
-        if (getSupportActionBar() != null) getSupportActionBar().setTitle(title);
-        if (path.isEmpty()) fabAdd.show(); else fabAdd.hide();
+        TextView tvTitle = findViewById(R.id.tv_custom_title);
+        if (tvTitle == null) return;
+
+        String title = path.isEmpty() ? "RESONODE" : path;
+        if (title.startsWith("General")) title = "PÚBLICA";
+
+        tvTitle.setText(title.toUpperCase());
     }
 
     private void playSongByName(String songName) {
@@ -530,7 +545,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         tvMiniArtist.setText(artistName);
         tvFullArtist.setText(artistName);
 
-        updatePlayIcons(isPlaying ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play);
+        updatePlayIcons(isPlaying);
 
         ImageView fullCover = findViewById(R.id.iv_full_cover);
         ImageView realMiniCover = findViewById(R.id.iv_mini_cover);
@@ -583,14 +598,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .error(Glide.with(this).load(localBackup))
                     .placeholder(R.mipmap.ic_launcher)
-                    .circleCrop()
+                    //.circleCrop()
                     .into(realMiniCover);
         }
-    }
-
-    private void updatePlayIcons(int resId) {
-        btnMiniPlay.setImageResource(resId);
-        btnFullPlay.setImageResource(resId);
     }
 
     private String formatTime(int ms) {
@@ -600,14 +610,28 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void setupUI() {
+        // 1. Arreglo para el notch/barra de estado (evita solapamientos)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+        }
+
+        // 2. Configuramos la Toolbar (Declaramos la variable una sola vez)
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayShowTitleEnabled(false);
+        }
+
+        // 3. El resto de la inicialización de la interfaz
         drawerLayout = findViewById(R.id.drawer_layout);
         NavigationView navView = findViewById(R.id.nav_view);
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
         drawerLayout.addDrawerListener(toggle);
         toggle.syncState();
         navView.setNavigationItemSelectedListener(this);
+
         View header = navView.getHeaderView(0);
         TextView tvUser = header.findViewById(R.id.tv_header_user);
         if(tvUser != null) tvUser.setText(session.getUsername());
@@ -619,7 +643,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         fabAdd = findViewById(R.id.fab_add);
         swipeRefresh = findViewById(R.id.swipe_refresh);
         ivPlaylistHeader = findViewById(R.id.iv_playlist_header);
-
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         swipeRefresh.setColorSchemeColors(0xFF1DB954);
         swipeRefresh.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
@@ -1014,6 +1037,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     @Override
     protected void onResume() {
         super.onResume();
+        updatePlayerIcons();
         if (networkReceiver == null) {
             networkReceiver = new NetworkReceiver(new NetworkReceiver.ConnectivityListener() {
                 @Override
@@ -1406,6 +1430,115 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             return true;
         } catch (PackageManager.NameNotFoundException e) {
             return false;
+        }
+    }
+
+    private void updatePlayerIcons() {
+        SharedPreferences prefs = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE);
+        String playStyle = prefs.getString("play_style", "hud");
+        String navStyle = prefs.getString("nav_style", "hud");
+        String colorKey = prefs.getString("icon_color", "resonode");
+
+        // 1. Assignar Icones Play/Pause
+        switch (playStyle) {
+            case "hex": playIconRes = R.drawable.ic_play_hex; pauseIconRes = R.drawable.ic_pause_hex; break;
+            case "glitch": playIconRes = R.drawable.ic_play_glitch; pauseIconRes = R.drawable.ic_pause_glitch; break;
+            case "original": playIconRes = android.R.drawable.ic_media_play; pauseIconRes = android.R.drawable.ic_media_pause; break;
+            default: playIconRes = R.drawable.ic_play_hud; pauseIconRes = R.drawable.ic_pause_hud; break;
+        }
+
+        // 2. Assignar Icones Next/Prev
+        int nextIconRes, prevIconRes;
+        switch (navStyle) {
+            case "hex": nextIconRes = R.drawable.ic_next_hex; prevIconRes = R.drawable.ic_prev_hex; break;
+            case "glitch": nextIconRes = R.drawable.ic_next_glitch; prevIconRes = R.drawable.ic_prev_glitch; break;
+            case "original": nextIconRes = android.R.drawable.ic_media_next; prevIconRes = android.R.drawable.ic_media_previous; break;
+            default: nextIconRes = R.drawable.ic_next_hud; prevIconRes = R.drawable.ic_prev_hud; break;
+        }
+        if (btnNext != null) btnNext.setImageResource(nextIconRes);
+        if (btnPrev != null) btnPrev.setImageResource(prevIconRes);
+
+        int tintColor;
+        switch (colorKey) {
+            case "white": tintColor = 0xFFFFFFFF; break;
+            case "green": tintColor = 0xFF1DB954; break;
+            case "cyan": tintColor = 0xFF03F8A7; break;
+            case "cyber_yellow": tintColor = 0xFFFCEE09; break; // Groc vibrant Cyberpunk
+            case "cyber_red": tintColor = 0xFFFF003C; break;    // Roig neó Arasaka
+            default: tintColor = 0xFFF2B327; break;             // ResoNode (Groc Daurat)
+        }
+
+        // 4. Tenyir TOTES les icones (Full Player i Mini Player) aplicant un Filtre de Color per damunt
+        if (btnMiniPlay != null) btnMiniPlay.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+        if (btnFullPlay != null) btnFullPlay.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+        if (btnNext != null) btnNext.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+        if (btnPrev != null) btnPrev.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+        if (btnClosePlayer != null) {
+            btnClosePlayer.setImageResource(playIconRes); // Li posem la icona de Play
+            btnClosePlayer.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN); // El tenyim del mateix color
+        }
+        // 5. Tenyir la barra de progrés (SeekBar)
+        if (seekBar != null) {
+            try {
+                android.graphics.drawable.Drawable progressDrawable = seekBar.getProgressDrawable().mutate();
+                progressDrawable.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+                seekBar.setProgressDrawable(progressDrawable);
+
+                if (Build.VERSION.SDK_INT >= 16) {
+                    android.graphics.drawable.Drawable thumb = seekBar.getThumb().mutate();
+                    thumb.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+                    seekBar.setThumb(thumb);
+                }
+            } catch (Exception e) {}
+        }
+
+        boolean isPlaying = false;
+        if (isBound && musicService != null) isPlaying = musicService.isPlaying();
+        updatePlayIcons(isPlaying);
+    }
+    private void updatePlayIcons(boolean isPlaying) {
+        int resId = isPlaying ? pauseIconRes : playIconRes;
+        if (btnMiniPlay != null) btnMiniPlay.setImageResource(resId);
+        if (btnFullPlay != null) btnFullPlay.setImageResource(resId);
+    }
+
+    @Override
+    public void onConfigurationChanged(@NonNull android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+
+        // 1. Guardem l'estat d'abans de girar (si el reproductor estava obert i el mode de l'adaptador)
+        boolean wasFullPlayerOpen = (fullPlayerLayout != null && fullPlayerLayout.getVisibility() == View.VISIBLE);
+        int currentAdapterMode = (adapter != null) ? adapter.getMode() : PlaylistAdapter.MODE_PRIVATE;
+
+        // 2. Forcem a recarregar els XML "en calent" (agafarà landscape o portrait automàticament)
+        setContentView(R.layout.activity_main);
+
+        // 3. Parem el temporitzador vell de la cançó abans de crear-ne un de nou per evitar duplicitats
+        if (seekBarHandler != null) seekBarHandler.removeCallbacksAndMessages(null);
+
+        // 4. Tornem a connectar TOTA la interfície als nous botons del nou XML
+        setupUI();
+        setupPlayer();
+        updatePlayerIcons();
+
+        // 5. Restaurem els estats visuals que teníem just abans de girar
+        if (adapter != null) adapter.setMode(currentAdapterMode);
+
+        if (wasFullPlayerOpen && fullPlayerLayout != null) {
+            fullPlayerLayout.setVisibility(View.VISIBLE);
+        }
+
+        // 6. Si estava sonant una cançó, li tornem a posar els títols i les caràtules al nou disseny
+        if (isBound && musicService != null && musicService.getCurrentSong() != null) {
+            updatePlayerUI(musicService.getCurrentSong(), musicService.isPlaying());
+        }
+
+        // 7. Refresquem els títols de dalt
+        boolean isVault = (currentAdapterMode == PlaylistAdapter.MODE_VAULT);
+        updateTitleAndFab(currentPath, isVault);
+        updateHeaderImage();
+        if (drawerLayout != null) {
+            androidx.core.view.ViewCompat.requestApplyInsets(drawerLayout);
         }
     }
 }

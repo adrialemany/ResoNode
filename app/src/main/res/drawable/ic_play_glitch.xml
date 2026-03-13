@@ -1,0 +1,21 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+
+    <!-- El triangle base amb talls interns -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M7,5 L19,12 L7,19 Z M9,8.5 L14.5,12 L9,15.5 Z" />
+
+    <!-- Blocs de glitch que sobresurten -->
+    <path android:fillColor="#FFFFFF" android:pathData="M5,7 h3 v1 h-3 z"/>
+    <path android:fillColor="#FFFFFF" android:pathData="M18,9 h4 v1 h-4 z"/>
+    <path android:fillColor="#FFFFFF" android:pathData="M4,14 h5 v1.5 h-5 z"/>
+    <path android:fillColor="#FFFFFF" android:pathData="M16,17 h3 v1 h-3 z"/>
+
+    <!-- Línia de desplaçament horitzontal -->
+    <path android:fillColor="#FFFFFF" android:pathData="M2,11.5 h20 v0.8 h-20 z"/>
+</vector>
