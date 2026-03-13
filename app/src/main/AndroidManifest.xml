@@ -56,7 +56,7 @@
         </activity>
 
         <activity android:name=".SettingsActivity"
-            android:theme="@style/Theme.AppCompat.NoActionBar"/>
+            android:theme="@style/Theme.ResoNode"/>
 
         <activity android:name=".WrappedActivity"
             android:theme="@style/Theme.AppCompat.NoActionBar"

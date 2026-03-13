@@ -29,7 +29,7 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
     public static final int MODE_SEARCH = MODE_VAULT;
 
     public int getMode() {
-        return mode; // O el nom que tinga la variable on guardes el mode.
+        return mode;
     }
 
     private final Context context;
@@ -153,7 +153,6 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
                     .diskCacheStrategy(DiskCacheStrategy.ALL) 
                     .error(Glide.with(context).load(backupCover)) 
                     .placeholder(R.mipmap.ic_launcher)
-                    //.circleCrop()
                     .into(holder.ivIcon);
         } else if (backupCover != null) {
             

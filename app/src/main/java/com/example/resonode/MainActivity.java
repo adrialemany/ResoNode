@@ -82,6 +82,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private DrawerLayout drawerLayout;
+    private ImageButton btnShuffle, btnRepeat;
 
     private int playIconRes = android.R.drawable.ic_media_play;
     private int pauseIconRes = android.R.drawable.ic_media_pause;
@@ -109,6 +110,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private MusicService musicService;
     private boolean isBound = false;
     private boolean isRetryingConnection = false;
+    private boolean isShuffle = false;
     private Handler seekBarHandler = new Handler();
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -159,6 +161,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             MusicService.LocalBinder binder = (MusicService.LocalBinder) service;
             musicService = binder.getService();
             isBound = true;
+            updateShuffleUI();
+            updateRepeatUI();
             musicService.setCallback(new MusicService.OnSongChangedListener() {
                 @Override public void onSongChanged(final MusicItem song, final boolean isPlaying) {
                     mainHandler.post(new Runnable() {
@@ -167,7 +171,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 }
                 @Override public void onPlaybackStateChanged(final boolean isPlaying) {
                     mainHandler.post(new Runnable() {
-                        // CANVI CLAU ACÍ:
                         @Override public void run() { updatePlayIcons(isPlaying); }
                     });
                 }
@@ -175,7 +178,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             MusicItem savedSong = musicService.getCurrentSong();
             if (savedSong != null) {
                 updatePlayerUI(savedSong, musicService.isPlaying());
-                // CANVI CLAU ACÍ:
                 if (!musicService.isPlaying()) updatePlayIcons(false);
                 fullPlayerLayout.setVisibility(View.GONE);
             }
@@ -384,15 +386,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void updateHeaderImage() {
-        // Busquem el CardView que envolta la imatge de la playlist
         View cardHeader = findViewById(R.id.card_header);
         if (ivPlaylistHeader == null || cardHeader == null) return;
 
-        // Si estem a l'arrel o en llistes públiques, amaguem el bloc de la portada
         if (currentPath.isEmpty() || currentPath.equals("General")) {
             cardHeader.setVisibility(View.GONE);
         } else {
-            // Si estem dins d'una playlist, el fem visible i carreguem la imatge
             cardHeader.setVisibility(View.VISIBLE);
             String headerUrl = "";
             try {
@@ -598,7 +597,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
                     .error(Glide.with(this).load(localBackup))
                     .placeholder(R.mipmap.ic_launcher)
-                    //.circleCrop()
                     .into(realMiniCover);
         }
     }
@@ -609,22 +607,22 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         return String.format("%d:%02d", m, s);
     }
 
+    public void setShuffle(boolean enabled) {
+        this.isShuffle = enabled;
+    }
+
     private void setupUI() {
-        // 1. Arreglo para el notch/barra de estado (evita solapamientos)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             getWindow().getDecorView().setSystemUiVisibility(
                     View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
         }
 
-        // 2. Configuramos la Toolbar (Declaramos la variable una sola vez)
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayShowTitleEnabled(false);
         }
 
-        // 3. El resto de la inicialización de la interfaz
         drawerLayout = findViewById(R.id.drawer_layout);
         NavigationView navView = findViewById(R.id.nav_view);
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
@@ -632,9 +630,25 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         toggle.syncState();
         navView.setNavigationItemSelectedListener(this);
 
-        View header = navView.getHeaderView(0);
-        TextView tvUser = header.findViewById(R.id.tv_header_user);
-        if(tvUser != null) tvUser.setText(session.getUsername());
+        if (navView.getHeaderCount() > 0) {
+            View headerView = navView.getHeaderView(0);
+            TextView tvUser = headerView.findViewById(R.id.tv_header_user);
+            ImageView ivProfile = headerView.findViewById(R.id.iv_user_profile);
+
+            if (tvUser != null) tvUser.setText(session.getUsername());
+
+            String profileUri = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
+                    .getString("profile_pic_uri", null);
+
+            if (ivProfile != null && profileUri != null) {
+                Glide.with(this)
+                        .load(Uri.parse(profileUri))
+                        .placeholder(R.mipmap.ic_launcher)
+                        .error(R.mipmap.ic_launcher)
+                        .centerCrop()
+                        .into(ivProfile);
+            }
+        }
 
         tvStatus = findViewById(R.id.tv_status);
         tvToolbarAction = findViewById(R.id.tv_toolbar_action);
@@ -643,83 +657,53 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         fabAdd = findViewById(R.id.fab_add);
         swipeRefresh = findViewById(R.id.swipe_refresh);
         ivPlaylistHeader = findViewById(R.id.iv_playlist_header);
+
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         swipeRefresh.setColorSchemeColors(0xFF1DB954);
-        swipeRefresh.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
-            @Override
-            public void onRefresh() {
-                retryHandler.removeCallbacks(retryRunnable);
-                fetchMusicContent(Config.SERVER_URL, currentPath);
-            }
-        });
-        retryRunnable = new Runnable() {
-            @Override public void run() { fetchMusicContent(Config.SERVER_URL, currentPath); }
-        };
+        swipeRefresh.setOnRefreshListener(() -> fetchMusicContent(Config.SERVER_URL, currentPath));
 
         adapter = new PlaylistAdapter(this, musicList, PlaylistAdapter.MODE_PRIVATE,
-                new PlaylistAdapter.OnItemClickListener() {
-                    @Override
-                    public void onItemClick(MusicItem item) {
-                        if (item.isFolder()) {
-                            String target = item.getPath();
-                            if (target.equals("Playlists Públiques")) target = "General";
-                            fetchMusicContent(Config.SERVER_URL, target);
-                        } else {
-                            currentSongIndex = musicList.indexOf(item);
-                            playServiceStream(item);
-                        }
+                item -> {
+                    if (item.isFolder()) {
+                        String target = item.getPath().equals("Playlists Públiques") ? "General" : item.getPath();
+                        fetchMusicContent(Config.SERVER_URL, target);
+                    } else {
+                        currentSongIndex = musicList.indexOf(item);
+                        playServiceStream(item);
                     }
                 },
-                new PlaylistAdapter.OnItemMenuClickListener() {
-                    @Override
-                    public void onMenuClick(MusicItem item, String action) {
-                        if (action.equals("Eliminar")) deleteItem(item);
-                        else if (action.equals("Reanomenar")) showRenameDialog(item);
-                        else if (action.equals("Afegir a Playlist")) showPlaylistSelectorForVaultItem(item.getPath());
-                        else if (action.equals("Descarregar Offline")) downloadPlaylist(item);
-                        else if (action.equals("Borrar Offline")) deleteOfflinePlaylist(item);
-                        else if (action.equals("Canviar Portada")) {
-                            playlistCoverTarget = item;
-                            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                            intent.setType("image/*");
-                            pickImageLauncher.launch(Intent.createChooser(intent, "Selecciona una portada"));
-                        }
+                (item, action) -> {
+                    if (action.equals("Eliminar")) deleteItem(item);
+                    else if (action.equals("Reanomenar")) showRenameDialog(item);
+                    else if (action.equals("Afegir a Playlist")) showPlaylistSelectorForVaultItem(item.getPath());
+                    else if (action.equals("Descarregar Offline")) downloadPlaylist(item);
+                    else if (action.equals("Borrar Offline")) deleteOfflinePlaylist(item);
+                    else if (action.equals("Canviar Portada")) {
+                        playlistCoverTarget = item;
+                        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                        intent.setType("image/*");
+                        pickImageLauncher.launch(Intent.createChooser(intent, "Selecciona una portada"));
                     }
                 }
         );
 
-        adapter.setOnSelectionChangedListener(new PlaylistAdapter.OnSelectionChangedListener() {
-            @Override
-            public void onSelectionChanged(int count) {
-                if (count > 0) {
-                    tvToolbarAction.setVisibility(View.VISIBLE);
-                    tvToolbarAction.setText("AFEGIR (" + count + ")");
-                    btnSearch.setVisibility(View.GONE);
-                    fabAdd.hide();
-                } else {
-                    tvToolbarAction.setVisibility(View.GONE);
-                    btnSearch.setVisibility(View.VISIBLE);
-                    if(currentPath.isEmpty()) fabAdd.show();
-                }
+        adapter.setOnSelectionChangedListener(count -> {
+            if (count > 0) {
+                tvToolbarAction.setVisibility(View.VISIBLE);
+                tvToolbarAction.setText("AFEGIR (" + count + ")");
+                btnSearch.setVisibility(View.GONE);
+                fabAdd.hide();
+            } else {
+                tvToolbarAction.setVisibility(View.GONE);
+                btnSearch.setVisibility(View.VISIBLE);
+                if (currentPath.isEmpty()) fabAdd.show();
             }
         });
+
         recyclerView.setAdapter(adapter);
 
-        fabAdd.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { handleFabClick(); }
-        });
-
-        btnSearch.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { searchLauncher.launch(new Intent(MainActivity.this, SearchActivity.class)); }
-        });
-
-        tvToolbarAction.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                List<MusicItem> selected = adapter.getSelectedItems();
-                if (!selected.isEmpty()) showAddToPlaylistDialog(selected);
-            }
-        });
+        fabAdd.setOnClickListener(v -> handleFabClick());
+        btnSearch.setOnClickListener(v -> searchLauncher.launch(new Intent(MainActivity.this, SearchActivity.class)));
     }
 
     private void downloadPlaylist(final MusicItem playlistItem) {
@@ -841,6 +825,31 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         btnClosePlayer.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { fullPlayerLayout.setVisibility(View.GONE); }
         });
+        btnShuffle = findViewById(R.id.btn_shuffle);
+
+        btnShuffle.setOnClickListener(v -> {
+            if (isBound && musicService != null) {
+                musicService.toggleShuffle();
+                updateShuffleUI();
+            }
+        });
+
+        btnRepeat = findViewById(R.id.btn_repeat);
+        btnShuffle = findViewById(R.id.btn_shuffle);
+
+        btnRepeat.setOnClickListener(v -> {
+            if (isBound && musicService != null) {
+                musicService.toggleRepeatOne();
+                updateRepeatUI();
+            }
+        });
+
+        btnShuffle.setOnClickListener(v -> {
+            if (isBound && musicService != null) {
+                musicService.toggleShuffle();
+                updateShuffleUI();
+            }
+        });
 
         View.OnClickListener playToggle = new View.OnClickListener() {
             @Override
@@ -871,6 +880,20 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 seekBarHandler.postDelayed(this, 1000);
             }
         }; seekBarHandler.post(updateSeek);
+    }
+
+    private void updateShuffleUI() {
+        if (isBound && musicService != null && btnShuffle != null) {
+            int color = musicService.isShuffleEnabled() ? 0xFFF2B327 : 0xFFFFFFFF;
+            btnShuffle.setColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN);
+        }
+    }
+
+    private void updateRepeatUI() {
+        if (isBound && musicService != null && btnRepeat != null) {
+            int color = musicService.isRepeatOneEnabled() ? 0xFFF2B327 : 0xFFFFFFFF;
+            btnRepeat.setColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN);
+        }
     }
 
     private void uploadCoverImage(Uri imageUri, final MusicItem playlist) {
@@ -1037,7 +1060,27 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     @Override
     protected void onResume() {
         super.onResume();
+
+        NavigationView navView = findViewById(R.id.nav_view);
+        if (navView != null && navView.getHeaderCount() > 0) {
+            View header = navView.getHeaderView(0);
+            ImageView ivProfile = header.findViewById(R.id.iv_user_profile);
+
+            String profileUri = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE).getString("profile_pic_uri", null);
+            if (ivProfile != null && profileUri != null) {
+                Glide.with(this).load(Uri.parse(profileUri)).placeholder(R.mipmap.ic_launcher).centerCrop().into(ivProfile);
+            }
+        }
+
         updatePlayerIcons();
+
+        if (networkReceiver == null) {
+            networkReceiver = new NetworkReceiver(this::handleNetworkChange);
+            registerReceiver(networkReceiver, new android.content.IntentFilter(android.net.ConnectivityManager.CONNECTIVITY_ACTION));
+        }
+
+        updatePlayerIcons();
+
         if (networkReceiver == null) {
             networkReceiver = new NetworkReceiver(new NetworkReceiver.ConnectivityListener() {
                 @Override
@@ -1439,7 +1482,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         String navStyle = prefs.getString("nav_style", "hud");
         String colorKey = prefs.getString("icon_color", "resonode");
 
-        // 1. Assignar Icones Play/Pause
         switch (playStyle) {
             case "hex": playIconRes = R.drawable.ic_play_hex; pauseIconRes = R.drawable.ic_pause_hex; break;
             case "glitch": playIconRes = R.drawable.ic_play_glitch; pauseIconRes = R.drawable.ic_pause_glitch; break;
@@ -1447,7 +1489,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             default: playIconRes = R.drawable.ic_play_hud; pauseIconRes = R.drawable.ic_pause_hud; break;
         }
 
-        // 2. Assignar Icones Next/Prev
         int nextIconRes, prevIconRes;
         switch (navStyle) {
             case "hex": nextIconRes = R.drawable.ic_next_hex; prevIconRes = R.drawable.ic_prev_hex; break;
@@ -1463,21 +1504,19 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             case "white": tintColor = 0xFFFFFFFF; break;
             case "green": tintColor = 0xFF1DB954; break;
             case "cyan": tintColor = 0xFF03F8A7; break;
-            case "cyber_yellow": tintColor = 0xFFFCEE09; break; // Groc vibrant Cyberpunk
-            case "cyber_red": tintColor = 0xFFFF003C; break;    // Roig neó Arasaka
-            default: tintColor = 0xFFF2B327; break;             // ResoNode (Groc Daurat)
+            case "cyber_yellow": tintColor = 0xFFFCEE09; break;
+            case "cyber_red": tintColor = 0xFFFF003C; break;
+            default: tintColor = 0xFFF2B327; break;
         }
 
-        // 4. Tenyir TOTES les icones (Full Player i Mini Player) aplicant un Filtre de Color per damunt
         if (btnMiniPlay != null) btnMiniPlay.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
         if (btnFullPlay != null) btnFullPlay.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
         if (btnNext != null) btnNext.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
         if (btnPrev != null) btnPrev.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
         if (btnClosePlayer != null) {
-            btnClosePlayer.setImageResource(playIconRes); // Li posem la icona de Play
-            btnClosePlayer.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN); // El tenyim del mateix color
+            btnClosePlayer.setImageResource(playIconRes);
+            btnClosePlayer.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
         }
-        // 5. Tenyir la barra de progrés (SeekBar)
         if (seekBar != null) {
             try {
                 android.graphics.drawable.Drawable progressDrawable = seekBar.getProgressDrawable().mutate();
@@ -1506,34 +1545,27 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     public void onConfigurationChanged(@NonNull android.content.res.Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
 
-        // 1. Guardem l'estat d'abans de girar (si el reproductor estava obert i el mode de l'adaptador)
         boolean wasFullPlayerOpen = (fullPlayerLayout != null && fullPlayerLayout.getVisibility() == View.VISIBLE);
         int currentAdapterMode = (adapter != null) ? adapter.getMode() : PlaylistAdapter.MODE_PRIVATE;
 
-        // 2. Forcem a recarregar els XML "en calent" (agafarà landscape o portrait automàticament)
         setContentView(R.layout.activity_main);
 
-        // 3. Parem el temporitzador vell de la cançó abans de crear-ne un de nou per evitar duplicitats
         if (seekBarHandler != null) seekBarHandler.removeCallbacksAndMessages(null);
 
-        // 4. Tornem a connectar TOTA la interfície als nous botons del nou XML
         setupUI();
         setupPlayer();
         updatePlayerIcons();
 
-        // 5. Restaurem els estats visuals que teníem just abans de girar
         if (adapter != null) adapter.setMode(currentAdapterMode);
 
         if (wasFullPlayerOpen && fullPlayerLayout != null) {
             fullPlayerLayout.setVisibility(View.VISIBLE);
         }
 
-        // 6. Si estava sonant una cançó, li tornem a posar els títols i les caràtules al nou disseny
         if (isBound && musicService != null && musicService.getCurrentSong() != null) {
             updatePlayerUI(musicService.getCurrentSong(), musicService.isPlaying());
         }
 
-        // 7. Refresquem els títols de dalt
         boolean isVault = (currentAdapterMode == PlaylistAdapter.MODE_VAULT);
         updateTitleAndFab(currentPath, isVault);
         updateHeaderImage();

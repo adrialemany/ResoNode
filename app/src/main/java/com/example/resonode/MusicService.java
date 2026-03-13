@@ -81,9 +81,13 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private File tempFile = null;
-
     
     private OfflineDB offlineDB;
+
+    private boolean isRepeatOne = false;
+
+    public void toggleRepeatOne() { this.isRepeatOne = !this.isRepeatOne; }
+    public boolean isRepeatOneEnabled() { return isRepeatOne; }
 
     private OkHttpClient createClient() {
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
@@ -196,13 +200,22 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
                 MusicItem currentItem = getCurrentSong();
 
                 if (seconds > 30 && currentItem != null) {
-                    OfflineDB db = new OfflineDB(getApplicationContext());
-                    db.logPlay(currentItem.getName(), currentItem.getArtist(), seconds);
-
-                    syncHistory(getApplicationContext());
+                    executor.execute(() -> {
+                        OfflineDB db = new OfflineDB(getApplicationContext());
+                        db.logPlay(currentItem.getName(), currentItem.getArtist(), seconds);
+                        syncHistory(getApplicationContext());
+                    });
                 }
 
-                playNext();
+                if (isRepeatOne) {
+                    if (currentItem != null) {
+                        playInternal(currentItem);
+                    } else {
+                        playNext();
+                    }
+                } else {
+                    playNext();
+                }
             }
         });
 
@@ -454,10 +467,18 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
 
     public void playNext() {
         if (playlist.isEmpty()) return;
-        int nextIndex = (currentIndex + 1) % playlist.size();
+
+        int nextIndex;
+
+        if (isShuffle) {
+            nextIndex = new java.util.Random().nextInt(playlist.size());
+
+        } else {
+            nextIndex = (currentIndex + 1) % playlist.size();
+        }
+
         MusicItem nextItem = playlist.get(nextIndex);
 
-        
         if (nextItem.isFolder()) {
             currentIndex = nextIndex;
             playNext();
@@ -465,7 +486,6 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
         }
 
         currentIndex = nextIndex;
-        
         playInternal(nextItem);
     }
 
@@ -720,5 +740,15 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
 
             } catch (Exception e) { e.printStackTrace(); }
         }).start();
+    }
+
+    private boolean isShuffle = false;
+
+    public void toggleShuffle() {
+        this.isShuffle = !this.isShuffle;
+    }
+
+    public boolean isShuffleEnabled() {
+        return isShuffle;
     }
 }

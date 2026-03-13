@@ -94,35 +94,30 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
-                        app:layout_scrollFlags="scroll">
-
-                        <TextView
-                            android:id="@+id/tv_status"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_gravity="center_horizontal"
-                            android:layout_marginTop="8dp"
-                            android:background="@drawable/bg_status_pill"
-                            android:paddingHorizontal="16dp"
-                            android:paddingVertical="4dp"
-                            android:text="CONNECTANT..."
-                            android:textColor="#FFFFFF"
-                            android:textSize="10sp"
-                            android:textStyle="bold"
-                            android:letterSpacing="0.2"
-                            android:visibility="gone" />
+                        app:layout_scrollFlags="scroll|enterAlways"> <TextView
+                        android:id="@+id/tv_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_horizontal"
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/bg_status_pill"
+                        android:paddingHorizontal="12dp"
+                        android:paddingVertical="4dp"
+                        android:textColor="#FFFFFF"
+                        android:textSize="10sp"
+                        android:visibility="gone" />
 
                         <com.google.android.material.card.MaterialCardView
                             android:id="@+id/card_header"
-                            android:layout_width="140dp"
-                            android:layout_height="140dp"
+                            android:layout_width="180dp"
+                            android:layout_height="180dp"
                             android:layout_gravity="center_horizontal"
-                            android:layout_marginTop="12dp"
-                            android:layout_marginBottom="12dp"
+                            android:layout_marginTop="20dp"
+                            android:layout_marginBottom="24dp"
                             app:cardCornerRadius="16dp"
-                            app:cardElevation="0dp"
+                            app:cardElevation="8dp"
                             android:visibility="gone">
-                            <com.google.android.material.imageview.ShapeableImageView
+                            <ImageView
                                 android:id="@+id/iv_playlist_header"
                                 android:layout_width="match_parent"
                                 android:layout_height="match_parent"
@@ -335,28 +330,57 @@
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:gravity="center">
-                    <ImageButton
-                        android:id="@+id/btn_prev"
-                        android:layout_width="50dp"
-                        android:layout_height="50dp"
-                        android:padding="12dp"
-                        android:scaleType="fitCenter"
-                        android:background="?attr/selectableItemBackgroundBorderless"/>
-                    <ImageButton
-                        android:id="@+id/btn_full_play"
-                        android:layout_width="70dp"
-                        android:layout_height="70dp"
-                        android:padding="5dp"
-                        android:scaleType="fitCenter"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:layout_marginHorizontal="32dp"/>
-                    <ImageButton
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center"
+                        android:paddingVertical="8dp">
+
+                        <ImageButton
+                            android:id="@+id/btn_repeat"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:src="@drawable/ic_repeat_one"
+                            android:padding="12dp"
+                            android:scaleType="fitCenter"
+                            android:translationX="-2dp" />
+
+                        <ImageButton
+                            android:id="@+id/btn_prev"
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
+                            android:padding="12dp"
+                            android:scaleType="fitCenter"
+                            android:background="?attr/selectableItemBackgroundBorderless"/>
+
+                        <ImageButton
+                            android:id="@+id/btn_full_play"
+                            android:layout_width="70dp"
+                            android:layout_height="70dp"
+                            android:padding="5dp"
+                            android:scaleType="fitCenter"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:layout_marginHorizontal="16dp"/> <ImageButton
                         android:id="@+id/btn_next"
                         android:layout_width="50dp"
                         android:layout_height="50dp"
                         android:padding="12dp"
                         android:scaleType="fitCenter"
                         android:background="?attr/selectableItemBackgroundBorderless"/>
+
+                        <ImageButton
+                            android:id="@+id/btn_shuffle"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:layout_marginStart="8dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:src="@drawable/ic_shuffle"
+                            android:padding="12dp"
+                            android:scaleType="fitCenter" />
+
+                    </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
         </LinearLayout>

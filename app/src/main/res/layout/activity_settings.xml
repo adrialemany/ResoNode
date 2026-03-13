@@ -4,7 +4,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#121212">
+    android:background="#121212"
+    android:fitsSystemWindows="true">
 
     <androidx.appcompat.widget.Toolbar
         android:id="@+id/toolbar_settings"
@@ -23,6 +24,64 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:padding="24dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="EL TEU PERFIL"
+                android:textColor="#F2B327"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.1"
+                android:layout_marginBottom="16dp"/>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardBackgroundColor="#1A1A1A"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="#1AFFFFFF">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="16dp">
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:layout_width="80dp"
+                        android:layout_height="80dp"
+                        app:cardCornerRadius="40dp"
+                        app:cardElevation="4dp">
+                        <ImageView
+                            android:id="@+id/iv_settings_profile"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:scaleType="centerCrop"
+                            android:src="@mipmap/ic_launcher" />
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <Button
+                        android:id="@+id/btn_change_photo"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="20dp"
+                        android:text="CANVIAR FOTO"
+                        android:textColor="#F2B327"
+                        android:textSize="13sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#333333"
+                android:layout_marginTop="24dp"
+                android:layout_marginBottom="24dp"/>
 
             <TextView
                 android:layout_width="wrap_content"
@@ -149,13 +208,6 @@
                 android:textColor="#FFFFFF"
                 android:textSize="18sp" />
 
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#333333"
-                android:layout_marginTop="24dp"
-                android:layout_marginBottom="24dp"/>
-
             <TextView
                 android:id="@+id/tv_other_devices_label"
                 android:layout_width="wrap_content"
@@ -165,6 +217,7 @@
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.1"
+                android:layout_marginTop="24dp"
                 android:visibility="gone"/>
 
             <LinearLayout
@@ -266,7 +319,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Aquest projecte és Open Source. Pots consultar el codi, contribuir o reportar problemes a:"
+                android:text="Aquest projecte és Open Source. Pots consultar el codi a GitHub."
                 android:textColor="#FFFFFF"
                 android:textSize="16sp"
                 android:layout_marginTop="16dp"/>
