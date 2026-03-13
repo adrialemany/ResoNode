@@ -20,8 +20,8 @@
         android:layout_height="wrap_content"
         android:background="#191414"
         app:tabTextColor="#AAAAAA"
-        app:tabSelectedTextColor="#1DB954"
-        app:tabIndicatorColor="#1DB954"/>
+        app:tabSelectedTextColor="#F2B327"
+        app:tabIndicatorColor="#F2B327"/>
 
     <ScrollView
         android:layout_width="match_parent"
@@ -45,7 +45,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="TEMPS ESCOLTAT"
-                android:textColor="#1DB954"
+                android:textColor="#F2B327"
                 android:textSize="12sp"
                 android:letterSpacing="0.2"
                 android:layout_marginTop="16dp"/>
@@ -71,7 +71,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="TOP 5 CANÇONS"
-                android:textColor="#1DB954"
+                android:textColor="#F2B327"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.1"

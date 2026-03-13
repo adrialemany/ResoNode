@@ -49,7 +49,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Artistes a la Bòveda"
-        android:textColor="#1DB954"
+        android:textColor="#F2B327"
         android:textSize="14sp"
         android:textStyle="bold"
         android:paddingTop="16dp"

@@ -28,7 +28,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="AQUEST DISPOSITIU"
-                android:textColor="#1DB954"
+                android:textColor="#F2B327"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.1"/>
@@ -54,7 +54,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="ALTRES DISPOSITIUS VINCULATS"
-                android:textColor="#1DB954"
+                android:textColor="#F2B327"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.1"
@@ -86,7 +86,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="EMMAGATZEMATGE I ÀUDIO"
-                android:textColor="#1DB954"
+                android:textColor="#F2B327"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.1"/>
@@ -151,7 +151,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="RESONODE WRAPPED"
-                android:textColor="#1DB954"
+                android:textColor="#F2B327"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.1"/>
@@ -164,7 +164,7 @@
                 android:textColor="#FFFFFF"
                 android:textSize="16sp"
                 android:layout_marginTop="16dp"
-                app:thumbTint="#1DB954"
+                app:thumbTint="#F2B327"
                 app:trackTint="#333333"/>
 
             <RadioGroup
@@ -181,7 +181,7 @@
                     android:layout_height="wrap_content"
                     android:text="Privat (Sols per a tu)"
                     android:textColor="#DDDDDD"
-                    android:buttonTint="#1DB954"/>
+                    android:buttonTint="#F2B327"/>
 
                 <RadioButton
                     android:id="@+id/rb_public"
@@ -189,7 +189,7 @@
                     android:layout_height="wrap_content"
                     android:text="Públic (Visible per altres usuaris)"
                     android:textColor="#DDDDDD"
-                    android:buttonTint="#1DB954"/>
+                    android:buttonTint="#F2B327"/>
             </RadioGroup>
 
             <View
@@ -203,7 +203,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="CODI FONT"
-                android:textColor="#1DB954"
+                android:textColor="#F2B327"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:letterSpacing="0.1"/>
@@ -220,11 +220,11 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="https://github.com/adrialemany/ResoNode"
-                android:textColor="#1DB954"
+                android:textColor="#F2B327"
                 android:textSize="14sp"
                 android:layout_marginTop="8dp"
                 android:autoLink="web"
-                android:textColorLink="#1DB954"
+                android:textColorLink="#F2B327"
                 android:linksClickable="true"/>
 
             <TextView

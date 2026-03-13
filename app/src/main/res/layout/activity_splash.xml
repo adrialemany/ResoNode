@@ -34,7 +34,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Music Unlimited"
-            android:textColor="#1DB954"
+            android:textColor="#F2B327"
             android:textSize="14sp"
             android:layout_marginTop="4dp"
             android:letterSpacing="0.2"

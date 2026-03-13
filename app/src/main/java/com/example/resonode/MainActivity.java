@@ -802,12 +802,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         try {
             android.graphics.drawable.Drawable progressDrawable = seekBar.getProgressDrawable().mutate();
-            progressDrawable.setColorFilter(0xFF1DB954, android.graphics.PorterDuff.Mode.SRC_IN);
+            progressDrawable.setColorFilter(0xFFF2B327, android.graphics.PorterDuff.Mode.SRC_IN);
             seekBar.setProgressDrawable(progressDrawable);
 
             if (Build.VERSION.SDK_INT >= 16) {
                 android.graphics.drawable.Drawable thumb = seekBar.getThumb().mutate();
-                thumb.setColorFilter(0xFF1DB954, android.graphics.PorterDuff.Mode.SRC_IN);
+                thumb.setColorFilter(0xFFF2B327, android.graphics.PorterDuff.Mode.SRC_IN);
                 seekBar.setThumb(thumb);
             }
         } catch (Exception e) {}
