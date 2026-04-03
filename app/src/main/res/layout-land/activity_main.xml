@@ -61,18 +61,28 @@
                             android:layout_width="wrap_content"
                             android:layout_height="match_parent"
                             android:gravity="center_vertical"
-                            android:paddingEnd="16dp"
+                            android:paddingEnd="4dp"
                             android:text="AFEGIR"
                             android:textColor="#F2B327"
                             android:textSize="12sp"
                             android:textStyle="bold"
                             android:letterSpacing="0.15"
                             android:visibility="gone"/>
+
+                        <ImageButton
+                            android:id="@+id/btn_bulk_more"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            app:srcCompat="@android:drawable/ic_menu_more"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            app:tint="#F2B327"
+                            android:visibility="gone"/>
                     </LinearLayout>
                 </RelativeLayout>
             </androidx.appcompat.widget.Toolbar>
 
             <View
+                android:id="@+id/separator"
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:layout_below="@id/toolbar"
@@ -81,7 +91,6 @@
             <androidx.coordinatorlayout.widget.CoordinatorLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-
                 android:layout_below="@id/toolbar">
 
                 <com.google.android.material.appbar.AppBarLayout
@@ -107,22 +116,28 @@
                         android:textSize="10sp"
                         android:visibility="gone" />
 
-                        <com.google.android.material.card.MaterialCardView
-                            android:id="@+id/card_header"
-                            android:layout_width="180dp"
-                            android:layout_height="180dp"
-                            android:layout_gravity="center_horizontal"
-                            android:layout_marginTop="20dp"
-                            android:layout_marginBottom="24dp"
-                            app:cardCornerRadius="16dp"
-                            app:cardElevation="8dp"
-                            android:visibility="gone">
-                            <ImageView
-                                android:id="@+id/iv_playlist_header"
-                                android:layout_width="match_parent"
-                                android:layout_height="match_parent"
-                                android:scaleType="centerCrop" />
-                        </com.google.android.material.card.MaterialCardView>
+                        <androidx.constraintlayout.widget.ConstraintLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:layout_margin="10dp">
+
+                            <com.google.android.material.card.MaterialCardView
+                                android:id="@+id/card_header"
+                                android:layout_width="180dp"
+                                android:layout_height="180dp"
+                                android:layout_gravity="center_horizontal"
+                                android:layout_marginTop="20dp"
+                                android:layout_marginBottom="24dp"
+                                app:cardCornerRadius="16dp"
+                                app:cardElevation="8dp"
+                                android:visibility="gone">
+                                <ImageView
+                                    android:id="@+id/iv_playlist_header"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="match_parent"
+                                    android:scaleType="centerCrop" />
+                            </com.google.android.material.card.MaterialCardView>
+                        </androidx.constraintlayout.widget.ConstraintLayout>
                     </LinearLayout>
                 </com.google.android.material.appbar.AppBarLayout>
 

@@ -2,7 +2,6 @@ package com.example.resonode;
 
 import android.content.Context;
 import android.view.LayoutInflater;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CheckBox;
@@ -58,7 +57,7 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
         this.mode = initialMode;
         this.listener = listener;
         this.menuListener = menuListener;
-        this.isSelectionActive = (initialMode == MODE_PUBLIC);
+        this.isSelectionActive = false;
 
         this.offlineDB = new OfflineDB(context);
         SessionManager session = new SessionManager(context);
@@ -68,7 +67,7 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
     public void setMode(int newMode) {
         this.mode = newMode;
         this.selectedItems.clear();
-        this.isSelectionActive = (newMode == MODE_PUBLIC);
+        this.isSelectionActive = false;
         notifyDataSetChanged();
     }
 
@@ -99,9 +98,8 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         final MusicItem item = items.get(position);
 
-        
         String rawName = item.getName();
-        if (rawName.equals("General")) rawName = "Playlists Públicas";
+        if (rawName.equals("General")) rawName = "Playlists Públiques";
         String displayName = item.isFolder() ? rawName : rawName.replace(".mp3", "").replace(".MP3", "").replaceAll("^(\\d+[\\s_\\-]*)+", "");
         holder.tvName.setText(displayName);
 
@@ -110,12 +108,8 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
         else infoText = (item.getArtist() != null && !item.getArtist().isEmpty() && !item.getArtist().equals("ResoNode")) ? item.getArtist() : "Cançó";
         holder.tvArtist.setText(infoText);
 
-        
-
-        
         String onlineUrlToTry = null;
         if (item.getPath().startsWith("/")) {
-            
             String originalServerPath = offlineDB.getServerPathForLocalFile(item.getPath());
             if (originalServerPath != null) {
                 try {
@@ -123,17 +117,14 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
                 } catch (Exception e) {}
             }
         } else {
-            
             try {
                 onlineUrlToTry = Config.SERVER_URL + "/cover?username=" + currentUsername + "&path=" + URLEncoder.encode(item.getPath(), "UTF-8");
             } catch (Exception e) {}
         }
 
-        
         File backupCover = null;
         File offlineDir = context.getDir("offline_music", Context.MODE_PRIVATE);
 
-        
         String coverNameTarget = item.isFolder() ? item.getName() : currentPath;
         if (!coverNameTarget.isEmpty()) {
             String safeName = "cover_" + coverNameTarget.replaceAll("[^a-zA-Z0-9.-]", "_") + ".jpg";
@@ -141,24 +132,19 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
             if (f.exists()) backupCover = f;
         }
 
-        
-        
-
         holder.ivIcon.setVisibility(View.VISIBLE);
         holder.tvIcon.setVisibility(View.GONE);
 
         if (onlineUrlToTry != null) {
             Glide.with(context)
                     .load(onlineUrlToTry)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL) 
-                    .error(Glide.with(context).load(backupCover)) 
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .error(Glide.with(context).load(backupCover))
                     .placeholder(R.mipmap.ic_launcher)
                     .into(holder.ivIcon);
         } else if (backupCover != null) {
-            
             Glide.with(context).load(backupCover).circleCrop().into(holder.ivIcon);
         } else {
-            
             holder.ivIcon.setVisibility(View.GONE);
             holder.tvIcon.setVisibility(View.VISIBLE);
             String emoji = item.isFolder() ? (mode == MODE_VAULT && !item.getPath().contains("/") ? "👤" : "💿") : "🎵";
@@ -166,33 +152,46 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
             holder.tvIcon.setText(emoji);
         }
 
-        
-        
-        if (mode == MODE_PUBLIC) {
+        // LÒGICA DE SELECCIÓ I MENÚS (ACTUALITZADA)
+        if (isSelectionActive) {
+            holder.checkBox.setVisibility(View.VISIBLE);
             holder.btnMore.setVisibility(View.GONE);
-            if (isSelectionActive) {
-                holder.checkBox.setVisibility(View.VISIBLE);
-                holder.checkBox.setOnCheckedChangeListener(null);
-                holder.itemView.setOnClickListener(v -> listener.onItemClick(item));
-                holder.checkBox.setChecked(selectedItems.contains(item));
-                holder.itemView.setBackgroundColor(selectedItems.contains(item) ? 0xFF333333 : 0x00000000);
-                holder.checkBox.setOnClickListener(v -> {
-                    if (selectedItems.contains(item)) selectedItems.remove(item);
-                    else selectedItems.add(item);
-                    notifyItemChanged(position);
-                    if(selectionListener != null) selectionListener.onSelectionChanged(selectedItems.size());
-                });
-            } else {
-                holder.checkBox.setVisibility(View.GONE);
-                holder.itemView.setBackgroundColor(0x00000000);
-                holder.itemView.setOnClickListener(v -> listener.onItemClick(item));
-            }
+            holder.checkBox.setOnCheckedChangeListener(null);
+            holder.checkBox.setChecked(selectedItems.contains(item));
+            holder.itemView.setBackgroundColor(selectedItems.contains(item) ? 0xFF333333 : 0x00000000);
+
+            holder.itemView.setOnClickListener(v -> {
+                if (selectedItems.contains(item)) selectedItems.remove(item);
+                else selectedItems.add(item);
+                notifyItemChanged(position);
+                if(selectionListener != null) selectionListener.onSelectionChanged(selectedItems.size());
+            });
+            holder.checkBox.setOnClickListener(v -> holder.itemView.performClick());
+            holder.itemView.setOnLongClickListener(null);
         } else {
             holder.checkBox.setVisibility(View.GONE);
-            holder.btnMore.setVisibility(View.VISIBLE);
             holder.itemView.setBackgroundColor(0x00000000);
-            holder.btnMore.setOnClickListener(v -> showPopupMenu(v, item));
+
+            if (mode == MODE_PUBLIC) {
+                holder.btnMore.setVisibility(View.GONE);
+            } else {
+                holder.btnMore.setVisibility(View.VISIBLE);
+                holder.btnMore.setOnClickListener(v -> showPopupMenu(v, item));
+            }
+
             holder.itemView.setOnClickListener(v -> listener.onItemClick(item));
+
+            // Permetre polsació llarga per activar selecció en privades
+            if (!item.isFolder()) {
+                holder.itemView.setOnLongClickListener(v -> {
+                    selectedItems.add(item);
+                    setSelectionMode(true);
+                    if(selectionListener != null) selectionListener.onSelectionChanged(selectedItems.size());
+                    return true;
+                });
+            } else {
+                holder.itemView.setOnLongClickListener(null);
+            }
         }
     }
 
@@ -214,8 +213,11 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
         }
 
         if (mode == MODE_PRIVATE) {
-            popup.getMenu().add("Canviar Portada");
-            popup.getMenu().add("Reanomenar");
+            // NOMÉS REANOMENAR/PORTADA SI ÉS CARPETA O ESTEM AL MENÚ INICIAL
+            if (currentPath.isEmpty() || item.isFolder()) {
+                popup.getMenu().add("Canviar Portada");
+                popup.getMenu().add("Reanomenar");
+            }
             popup.getMenu().add("Eliminar");
         }
 
@@ -231,8 +233,7 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
         ImageView ivIcon;
-        TextView tvIcon;
-        TextView tvName, tvArtist;
+        TextView tvIcon, tvName, tvArtist;
         ImageView btnMore;
         CheckBox checkBox;
 

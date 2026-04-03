@@ -163,7 +163,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
                 Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                         .setContentTitle("ResoNode")
                         .setContentText("Servei actiu")
-                        .setSmallIcon(R.mipmap.ic_launcher)
+                        .setSmallIcon(R.drawable.ic_notification)
                         .setPriority(NotificationCompat.PRIORITY_MIN)
                         .build();
                 startForeground(NOTIFICATION_ID, notification);
@@ -197,12 +197,21 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
             @Override public void onCompletion(MediaPlayer mp) {
                 long durationMs = System.currentTimeMillis() - songStartTime;
                 int seconds = (int) (durationMs / 1000);
+
+                int realSongDurationSec = mp.getDuration() / 1000;
+
+                if (seconds > realSongDurationSec) {
+                    seconds = realSongDurationSec;
+                }
+
                 MusicItem currentItem = getCurrentSong();
 
-                if (seconds > 30 && currentItem != null) {
+                final int finalSeconds = seconds;
+
+                if (finalSeconds > 30 && currentItem != null) {
                     executor.execute(() -> {
                         OfflineDB db = new OfflineDB(getApplicationContext());
-                        db.logPlay(currentItem.getName(), currentItem.getArtist(), seconds);
+                        db.logPlay(currentItem.getName(), currentItem.getArtist(), finalSeconds);
                         syncHistory(getApplicationContext());
                     });
                 }
@@ -667,7 +676,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
                 .build());
 
         NotificationCompat.Builder notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_media_play)
+                .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(cleanTitle)
                 .setContentText(artistName)
                 .setLargeIcon(largeIcon)

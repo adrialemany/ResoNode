@@ -83,6 +83,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private DrawerLayout drawerLayout;
     private ImageButton btnShuffle, btnRepeat;
+    private ImageButton btnSearch, btnBulkMore;
 
     private int playIconRes = android.R.drawable.ic_media_play;
     private int pauseIconRes = android.R.drawable.ic_media_pause;
@@ -90,7 +91,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private RecyclerView recyclerView;
     private TextView tvStatus, tvToolbarAction;
     private FloatingActionButton fabAdd;
-    private ImageButton btnSearch;
     private SwipeRefreshLayout swipeRefresh;
     private ImageView ivPlaylistHeader;
 
@@ -202,7 +202,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                             }, 1000);
                         } else if ("add_to_playlist".equals(action)) {
                             String pathId = data.getStringExtra("path_id");
-                            showPlaylistSelectorForVaultItem(pathId);
+                            MusicItem searchItem = new MusicItem("Cerca", "file", pathId);
+                            showPlaylistSelectorForVaultItem(searchItem);
                         }
                     }
                 }
@@ -497,6 +498,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (title.startsWith("General")) title = "PÚBLICA";
 
         tvTitle.setText(title.toUpperCase());
+        if (btnSearch != null) {
+            btnSearch.setVisibility(path.isEmpty() ? View.VISIBLE : View.GONE);
+        }
+        if (fabAdd != null) {
+            if (path.isEmpty()) {
+                fabAdd.show();
+            } else {
+                fabAdd.hide();
+            }
+        }
     }
 
     private void playSongByName(String songName) {
@@ -653,6 +664,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         tvStatus = findViewById(R.id.tv_status);
         tvToolbarAction = findViewById(R.id.tv_toolbar_action);
         btnSearch = findViewById(R.id.btn_search);
+        // NOU: Inicialitzem el botó de selecció massiva
+        btnBulkMore = findViewById(R.id.btn_bulk_more);
+
         recyclerView = findViewById(R.id.recycler_view_playlists);
         fabAdd = findViewById(R.id.fab_add);
         swipeRefresh = findViewById(R.id.swipe_refresh);
@@ -675,7 +689,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 (item, action) -> {
                     if (action.equals("Eliminar")) deleteItem(item);
                     else if (action.equals("Reanomenar")) showRenameDialog(item);
-                    else if (action.equals("Afegir a Playlist")) showPlaylistSelectorForVaultItem(item.getPath());
+                    else if (action.equals("Afegir a Playlist")) showPlaylistSelectorForVaultItem(item);
                     else if (action.equals("Descarregar Offline")) downloadPlaylist(item);
                     else if (action.equals("Borrar Offline")) deleteOfflinePlaylist(item);
                     else if (action.equals("Canviar Portada")) {
@@ -687,15 +701,27 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 }
         );
 
+        // NOU: Lògica de selecció actualitzada per a mostrar els 3 puntets quan toque
         adapter.setOnSelectionChangedListener(count -> {
             if (count > 0) {
-                tvToolbarAction.setVisibility(View.VISIBLE);
-                tvToolbarAction.setText("AFEGIR (" + count + ")");
                 btnSearch.setVisibility(View.GONE);
                 fabAdd.hide();
+
+                // Si estem en una llista privada (on es pot esborrar), mostrem 3 punts
+                if (adapter.getMode() == PlaylistAdapter.MODE_PRIVATE) {
+                    btnBulkMore.setVisibility(View.VISIBLE);
+                    tvToolbarAction.setVisibility(View.VISIBLE);
+                    tvToolbarAction.setText(count + " sel.");
+                } else {
+                    // Si és la Pública, només mostrar "AFEGIR"
+                    btnBulkMore.setVisibility(View.GONE);
+                    tvToolbarAction.setVisibility(View.VISIBLE);
+                    tvToolbarAction.setText("AFEGIR (" + count + ")");
+                }
             } else {
                 tvToolbarAction.setVisibility(View.GONE);
-                btnSearch.setVisibility(View.VISIBLE);
+                btnBulkMore.setVisibility(View.GONE);
+                btnSearch.setVisibility(currentPath.isEmpty() ? View.VISIBLE : View.GONE);
                 if (currentPath.isEmpty()) fabAdd.show();
             }
         });
@@ -704,6 +730,63 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         fabAdd.setOnClickListener(v -> handleFabClick());
         btnSearch.setOnClickListener(v -> searchLauncher.launch(new Intent(MainActivity.this, SearchActivity.class)));
+
+        // Seguirà servint per afegir al polsar el text groc
+        tvToolbarAction.setOnClickListener(v -> {
+            List<MusicItem> selected = adapter.getSelectedItems();
+            if (!selected.isEmpty()) {
+                showAddToPlaylistDialog(selected);
+            }
+        });
+
+        // NOU: Clic als 3 puntets globals per a múltiples cançons
+        btnBulkMore.setOnClickListener(v -> {
+            android.widget.PopupMenu popup = new android.widget.PopupMenu(MainActivity.this, v);
+            popup.getMenu().add("Afegir a Playlist");
+            popup.getMenu().add("Eliminar");
+            popup.setOnMenuItemClickListener(item -> {
+                String action = item.getTitle().toString();
+                List<MusicItem> selected = adapter.getSelectedItems();
+                if (action.equals("Afegir a Playlist")) {
+                    showAddToPlaylistDialog(selected);
+                } else if (action.equals("Eliminar")) {
+                    bulkDeleteItems(selected);
+                }
+                return true;
+            });
+            popup.show();
+        });
+    }
+
+    private void bulkDeleteItems(List<MusicItem> items) {
+        new AlertDialog.Builder(this)
+                .setTitle("Borrar " + items.size() + " cançons?")
+                .setMessage("Aquesta acció eliminarà les cançons seleccionades de la playlist.")
+                .setPositiveButton("SI", (dialog, which) -> {
+                    executor.execute(() -> {
+                        for (MusicItem i : items) {
+                            JSONObject j = new JSONObject();
+                            try {
+                                j.put("username", session.getUsername());
+                                j.put("path", i.getPath());
+                                RequestBody body = RequestBody.create(MediaType.parse("application/json"), j.toString());
+                                Request request = new Request.Builder()
+                                        .url(Config.SERVER_URL + "/playlist/delete_item")
+                                        .header("x-secret-key", Config.API_SECRET_KEY)
+                                        .post(body)
+                                        .build();
+                                client.newCall(request).execute();
+                            } catch (Exception e) {}
+                        }
+                        mainHandler.post(() -> {
+                            Toast.makeText(MainActivity.this, "S'han eliminat les cançons", Toast.LENGTH_SHORT).show();
+                            adapter.setSelectionMode(false);
+                            fetchMusicContent(Config.SERVER_URL, currentPath);
+                        });
+                    });
+                })
+                .setNegativeButton("NO", null)
+                .show();
     }
 
     private void downloadPlaylist(final MusicItem playlistItem) {
@@ -994,9 +1077,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private void goToGeneralAndSelect() {
         fetchMusicContent(Config.SERVER_URL, "General");
-        mainHandler.postDelayed(new Runnable() {
-            @Override public void run() { if(adapter!=null) { adapter.setSelectionMode(true); fabAdd.hide(); } }
-        }, 500);
     }
 
     private void postJson(final String endpoint, final String jsonBody, final Runnable onSuccess) {
@@ -1035,7 +1115,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if(fullPlayerLayout.getVisibility()==View.VISIBLE) fullPlayerLayout.setVisibility(View.GONE);
         else if(drawerLayout.isDrawerOpen(GravityCompat.START)) drawerLayout.closeDrawer(GravityCompat.START);
         else if(!adapter.getSelectedItems().isEmpty()){ adapter.setSelectionMode(false); fabAdd.show(); }
-        else if(!currentPath.isEmpty() && !currentPath.equals("General")) {
+        else if(!currentPath.isEmpty()) {
             File f=new File(currentPath);
             String p=f.getParent();
             if(p==null)p="";
@@ -1174,7 +1254,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 }).show();
     }
 
-    private void showPlaylistSelectorForVaultItem(final String p) {
+    private void showPlaylistSelectorForVaultItem(final MusicItem item) {
         executor.execute(new Runnable() {
             @Override public void run() {
                 try{
@@ -1186,7 +1266,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         mainHandler.post(new Runnable() {
                             @Override public void run() {
                                 new AlertDialog.Builder(MainActivity.this).setItems(l.toArray(new String[0]), new DialogInterface.OnClickListener() {
-                                    @Override public void onClick(DialogInterface d, int w) { addToSpecificPlaylist(l.get(w),p); }
+                                    @Override public void onClick(DialogInterface d, int w) {
+                                        addToSpecificPlaylist(l.get(w), item);
+                                    }
                                 }).show();
                             }
                         });
@@ -1196,22 +1278,36 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         });
     }
 
-    private void addToSpecificPlaylist(String n, String p) {
-        JSONObject j=new JSONObject();
-        try{
-            j.put("username",session.getUsername());
-            j.put("playlist_name",n);
-            JSONArray a=new JSONArray();
-            a.put(p);
-            j.put("items",a);
-        }catch(Exception e){}
-        postJson("/playlist/add_from_vault",j.toString(), new Runnable() {
-            @Override public void run() {
-                mainHandler.post(new Runnable() {
-                    @Override public void run() { Toast.makeText(MainActivity.this,"Afegit",Toast.LENGTH_SHORT).show(); }
-                });
-            }
-        });
+    private void addToSpecificPlaylist(final String playlistName, final MusicItem item) {
+        JSONObject j = new JSONObject();
+        try {
+            j.put("username", session.getUsername());
+            j.put("playlist_name", playlistName);
+
+            JSONArray a = new JSONArray();
+            a.put(item.getPath());
+
+            // TRUC: Enviem l'array amb els dos noms ("items" i "songs")
+            // Així el teu servidor segur que ho llig correctament sense donar error
+            j.put("items", a);
+            j.put("songs", a);
+
+            // Tria la ruta de l'API correcta
+            String endpoint = item.isFolder() ? "/playlist/add_from_vault" : "/playlist/add";
+
+            postJson(endpoint, j.toString(), new Runnable() {
+                @Override public void run() {
+                    mainHandler.post(new Runnable() {
+                        @Override public void run() {
+                            // 1. Mostrem el missatge de confirmació
+                            Toast.makeText(MainActivity.this, "Afegit a " + playlistName, Toast.LENGTH_SHORT).show();
+
+                            // 2. Com que NO cridem a fetchMusicContent(""), la pantalla es queda on estava!
+                        }
+                    });
+                }
+            });
+        } catch(Exception e){}
     }
 
     private void showAddToPlaylistDialog(final List<MusicItem> l) {
@@ -1529,6 +1625,27 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     seekBar.setThumb(thumb);
                 }
             } catch (Exception e) {}
+        }
+
+        TextView tvTitle = findViewById(R.id.tv_custom_title);
+        if (tvTitle != null) {
+            tvTitle.setTextColor(tintColor);
+        }
+
+        if (fabAdd != null) {
+            fabAdd.setBackgroundTintList(android.content.res.ColorStateList.valueOf(tintColor));
+        }
+
+        if (tvToolbarAction != null) {
+            tvToolbarAction.setTextColor(tintColor);
+        }
+
+        if (btnBulkMore != null) {
+            btnBulkMore.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+        }
+
+        if (swipeRefresh != null) {
+            swipeRefresh.setColorSchemeColors(tintColor);
         }
 
         boolean isPlaying = false;
