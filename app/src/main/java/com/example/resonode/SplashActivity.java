@@ -58,6 +58,11 @@ public class SplashActivity extends AppCompatActivity {
                 intent = new Intent(SplashActivity.this, LoginActivity.class);
             }
 
+            if (getIntent() != null && getIntent().getData() != null) {
+                intent.setAction(getIntent().getAction());
+                intent.setData(getIntent().getData());
+            }
+
             startActivity(intent);
             finish(); 
         });

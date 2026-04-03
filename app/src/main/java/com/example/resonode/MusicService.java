@@ -340,8 +340,8 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
             String urlToPlay = "";
             boolean isLocal = false;
 
-            
-            if (item.getPath().startsWith("/")) {
+
+            if (item.getPath().startsWith("/") || item.getPath().startsWith("content://")) {
                 urlToPlay = item.getPath();
                 isLocal = true;
             }
@@ -408,14 +408,15 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
             try {
                 mediaPlayer.reset();
 
-                if (!isLocalFile && url.startsWith("http")) {
+                if (url.startsWith("content://")) {
+                    mediaPlayer.setDataSource(getApplicationContext(), Uri.parse(url));
+                } else if (!isLocalFile && url.startsWith("http")) {
                     Map<String, String> headers = new HashMap<>();
                     headers.put("x-secret-key", Config.API_SECRET_KEY);
                     mediaPlayer.setDataSource(getApplicationContext(), Uri.parse(url), headers);
                 } else {
                     mediaPlayer.setDataSource(url);
                 }
-
                 
                 mediaPlayer.setOnErrorListener(new MediaPlayer.OnErrorListener() {
                     @Override

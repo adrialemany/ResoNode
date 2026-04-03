@@ -77,6 +77,8 @@ import android.net.Uri;
 
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
 
+    private Intent pendingIntentToHandle = null;
+
     static {
         AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
     }
@@ -155,6 +157,26 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
     );
 
+    private final ActivityResultLauncher<Intent> pickLocalSongLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    Uri audioUri = result.getData().getData();
+                    if (audioUri != null) {
+                        try {
+                            getContentResolver().takePersistableUriPermission(audioUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        } catch (Exception e){}
+
+                        String[] meta = getAudioMetadata(audioUri);
+                        String displayName = meta[0];
+                        String artistName = meta[1];
+
+                        showPlaylistSelectorForLocalSong(audioUri, displayName, artistName);
+                    }
+                }
+            }
+    );
+
     private final ServiceConnection serviceConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
@@ -181,6 +203,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 if (!musicService.isPlaying()) updatePlayIcons(false);
                 fullPlayerLayout.setVisibility(View.GONE);
             }
+
+            handlePendingIntent();
         }
         @Override public void onServiceDisconnected(ComponentName name) { isBound = false; }
     };
@@ -277,6 +301,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         checkForUpdates();
         fetchMusicContent(Config.SERVER_URL, "");
+        pendingIntentToHandle = getIntent();
     }
 
     private void fetchMusicContent(final String baseUrl, final String folderPath) {
@@ -338,6 +363,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         public void run() {
                             try {
                                 if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
+                                if (!currentPath.isEmpty() && !currentPath.equals("General")) {
+                                    List<MusicItem> offlineSongs = offlineDB.getSongsInPlaylist(currentPath);
+                                    for (MusicItem os : offlineSongs) {
+                                        if (os.getPath().startsWith("content://")) temp.add(os);
+                                    }
+                                }
                                 musicList.clear();
                                 musicList.addAll(temp);
                                 updateTitleAndFab(currentPath, finalIsVault);
@@ -1064,13 +1095,19 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void handleFabClick() {
-        String[] opts = {"Crear Playlist", "Afegir de Playlist Pública", "Buscar en Bòveda"};
+        String[] opts = {"Crear Playlist", "Afegir de Playlist Pública", "Buscar en Bòveda", "Afegir Cançó Local"};
         new AlertDialog.Builder(this).setItems(opts, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface d, int w) {
                 if(w==0) showCreatePlaylistDialog();
                 else if(w==1) goToGeneralAndSelect();
-                else searchLauncher.launch(new Intent(MainActivity.this, SearchActivity.class));
+                else if(w==2) searchLauncher.launch(new Intent(MainActivity.this, SearchActivity.class));
+                else {
+                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("audio/*");
+                    pickLocalSongLauncher.launch(intent);
+                }
             }
         }).show();
     }
@@ -1658,6 +1695,67 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (btnFullPlay != null) btnFullPlay.setImageResource(resId);
     }
 
+    private String[] getAudioMetadata(Uri uri) {
+        String title = "Arxiu Desconegut";
+        String artist = "Dispositiu Local";
+        android.media.MediaMetadataRetriever retriever = new android.media.MediaMetadataRetriever();
+        try {
+            retriever.setDataSource(this, uri);
+            String metaTitle = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE);
+            String metaArtist = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST);
+
+            if (metaTitle != null && !metaTitle.trim().isEmpty()) {
+                title = metaTitle;
+            } else {
+                android.database.Cursor cursor = getContentResolver().query(uri, null, null, null, null);
+                if (cursor != null && cursor.moveToFirst()) {
+                    int nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                    if (nameIndex != -1) title = cursor.getString(nameIndex);
+                    cursor.close();
+                }
+            }
+            if (metaArtist != null && !metaArtist.trim().isEmpty()) {
+                artist = metaArtist;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            try { retriever.release(); } catch (Exception e) {}
+        }
+        return new String[]{title, artist};
+    }
+
+    private void handlePendingIntent() {
+        if (pendingIntentToHandle != null && Intent.ACTION_VIEW.equals(pendingIntentToHandle.getAction())) {
+            Uri audioUri = pendingIntentToHandle.getData();
+            if (audioUri != null && isBound && musicService != null) {
+
+                String[] meta = getAudioMetadata(audioUri);
+                String title = meta[0];
+                String artist = meta[1];
+
+                MusicItem externalItem = new MusicItem(title, "file", audioUri.toString(), artist);
+                List<MusicItem> temp = new ArrayList<>();
+                temp.add(externalItem);
+                currentSongIndex = 0;
+                musicService.playUrl(audioUri.toString(), temp, 0, session.getUsername());
+
+                if (fullPlayerLayout != null) {
+                    fullPlayerLayout.setVisibility(View.VISIBLE);
+                }
+            }
+            pendingIntentToHandle = null;
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        pendingIntentToHandle = intent;
+        handlePendingIntent();
+    }
+
     @Override
     public void onConfigurationChanged(@NonNull android.content.res.Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
@@ -1689,5 +1787,50 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (drawerLayout != null) {
             androidx.core.view.ViewCompat.requestApplyInsets(drawerLayout);
         }
+    }
+
+    private void showPlaylistSelectorForLocalSong(final Uri audioUri, final String title, final String artist) {
+        executor.execute(new Runnable() {
+            @Override public void run() {
+                try {
+                    Response r = client.newCall(new Request.Builder().url(Config.SERVER_URL + "/browse?username=" + session.getUsername() + "&folder=").build()).execute();
+                    if(r.isSuccessful()) {
+                        JSONArray a = new JSONObject(r.body().string()).getJSONArray("items");
+                        final List<String> pList = new ArrayList<>();
+                        for (int x = 0; x < a.length(); x++) {
+                            if (a.getJSONObject(x).getString("type").equals("folder")) {
+                                pList.add(a.getJSONObject(x).getString("name"));
+                            }
+                        }
+
+                        mainHandler.post(new Runnable() {
+                            @Override public void run() {
+                                if (pList.isEmpty()) {
+                                    Toast.makeText(MainActivity.this, "Crea primer una playlist per afegir cançons!", Toast.LENGTH_LONG).show();
+                                    return;
+                                }
+
+                                new AlertDialog.Builder(MainActivity.this)
+                                        .setTitle("On vols afegir-la?")
+                                        .setItems(pList.toArray(new String[0]), new DialogInterface.OnClickListener() {
+                                            @Override public void onClick(DialogInterface d, int w) {
+                                                String selectedPlaylist = pList.get(w);
+
+                                                offlineDB.saveSong(audioUri.toString(), title, selectedPlaylist, audioUri.toString(), artist);
+                                                Toast.makeText(MainActivity.this, "Afegida a " + selectedPlaylist, Toast.LENGTH_SHORT).show();
+
+                                                if (currentPath.equals(selectedPlaylist)) {
+                                                    fetchMusicContent(Config.SERVER_URL, currentPath);
+                                                }
+                                            }
+                                        }).show();
+                            }
+                        });
+                    }
+                } catch(Exception e) {
+                    mainHandler.post(() -> Toast.makeText(MainActivity.this, "Error carregant les playlists", Toast.LENGTH_SHORT).show());
+                }
+            }
+        });
     }
 }
