@@ -13,7 +13,6 @@ ResoNode is a self-hosted music streaming platform designed to provide full cont
   <img src="./assets/playlist.png" width="22%" alt="Playlist">
   <img src="./assets/player.png" width="22%" alt="Music Player">
   <img src="./assets/side_pannel.png" width="22%" alt="Navigation Menu">
-  <img src="./assets/settings.png width="22%" alt="Settings & Config">
 </p>
 
 ## Overview
