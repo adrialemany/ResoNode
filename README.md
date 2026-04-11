@@ -48,8 +48,10 @@ To bypass carrier-grade NAT (CGNAT) and dynamic IPs without user intervention:
 
 ## ResoNode Wrapped
 
+<p align="center">
 <img src="./assets/wrapped.png" width="220" alt="Wrapped Statistics">
 <img src="./assets/wrapped_ranking.png" width="220" alt="Wrapped Ranking">
+</p>
 
 An integrated, privacy-focused analytics engine designed to track listening habits without third-party data mining. Unlike standard streaming services, this feature is built with a **local-first** philosophy.
 
