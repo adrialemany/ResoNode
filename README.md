@@ -10,9 +10,9 @@ ResoNode is a self-hosted music streaming platform designed to provide full cont
 
 <p align="center">
   <img src="./assets/inici.png" width="22%" alt="Home Library">
-  <img src="./assets/side_pannel.png" width="22%" alt="Navigation Menu">
+  <img src="./assets/playlist.png" width="22%" alt="Playlist">
   <img src="./assets/player.png" width="22%" alt="Music Player">
-  <img src="./assets/settings.jpg" width="22%" alt="Settings & Config">
+  <img src="./assets/side_pannel.png" width="22%" alt="Navigation Menu">
 </p>
 
 ## Overview
@@ -48,7 +48,10 @@ To bypass carrier-grade NAT (CGNAT) and dynamic IPs without user intervention:
 
 ## ResoNode Wrapped
 
-<img src="./assets/wrapped.png" align="right" width="220" alt="Wrapped Statistics">
+<p align="center">
+<img src="./assets/wrapped.png" width="220" alt="Wrapped Statistics">
+<img src="./assets/wrapped_ranking.png" width="220" alt="Wrapped Ranking">
+</p>
 
 An integrated, privacy-focused analytics engine designed to track listening habits without third-party data mining. Unlike standard streaming services, this feature is built with a **local-first** philosophy.
 
