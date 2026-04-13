@@ -92,7 +92,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
     private OkHttpClient createClient() {
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(120, TimeUnit.SECONDS)
                 .addInterceptor(new Interceptor() {
                     @Override
                     public Response intercept(Chain chain) throws IOException {
@@ -193,38 +193,45 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
             }
         });
 
-        mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-            @Override public void onCompletion(MediaPlayer mp) {
-                long durationMs = System.currentTimeMillis() - songStartTime;
-                int seconds = (int) (durationMs / 1000);
+        mediaPlayer.setOnCompletionListener(mp -> {
+            long elapsedMs = System.currentTimeMillis() - songStartTime;
+            int songDurationMs = mp.getDuration();
 
-                int realSongDurationSec = mp.getDuration() / 1000;
+            // ✅ Si la canción "terminó" demasiado pronto, fue un error de red
+            // Tolerancia de 3 segundos antes del final real
+            boolean reallyFinished = (songDurationMs <= 0) ||
+                    (elapsedMs >= songDurationMs - 3000);
 
-                if (seconds > realSongDurationSec) {
-                    seconds = realSongDurationSec;
-                }
+            if (!reallyFinished) {
+                // Fue un corte de red, NO era el final → reintentar
+                android.util.Log.w("MusicService", "onCompletion prematuro (red cortada?), reintentando");
+                handlePlaybackError();
+                return;
+            }
 
-                MusicItem currentItem = getCurrentSong();
+            // A partir de aquí, la lógica original de logging y siguiente canción
+            int seconds = (int) (elapsedMs / 1000);
+            int realSongDurationSec = songDurationMs / 1000;
+            if (seconds > realSongDurationSec) seconds = realSongDurationSec;
 
-                final int finalSeconds = seconds;
+            MusicItem currentItem = getCurrentSong();
+            final int finalSeconds = seconds;
 
-                if (finalSeconds > 30 && currentItem != null) {
-                    executor.execute(() -> {
-                        OfflineDB db = new OfflineDB(getApplicationContext());
-                        db.logPlay(currentItem.getName(), currentItem.getArtist(), finalSeconds);
-                        syncHistory(getApplicationContext());
-                    });
-                }
+            if (finalSeconds > 30 && currentItem != null) {
+                executor.execute(() -> {
+                    OfflineDB db = new OfflineDB(getApplicationContext());
+                    db.logPlay(currentItem.getName(), currentItem.getArtist(), finalSeconds);
+                    syncHistory(getApplicationContext());
+                });
+            }
 
-                if (isRepeatOne) {
-                    if (currentItem != null) {
-                        playInternal(currentItem);
-                    } else {
-                        playNext();
-                    }
-                } else {
-                    playNext();
-                }
+            failureCount = 0; // ✅ Reset al completar correctamente
+
+            if (isRepeatOne) {
+                if (currentItem != null) playInternal(currentItem);
+                else playNext();
+            } else {
+                playNext();
             }
         });
 
@@ -239,13 +246,19 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
 
     private void handlePlaybackError() {
         failureCount++;
-        
         if (failureCount < MAX_RETRIES) {
-            playNext();
+            // ✅ Reintentar la misma canción con delay, no saltar
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                if (currentIndex != -1 && !playlist.isEmpty()) {
+                    playInternal(playlist.get(currentIndex));
+                }
+            }, 1500); // 1.5s de espera antes de reintentar
         } else {
             failureCount = 0;
-            new Handler(Looper.getMainLooper()).post(new Runnable() {
-                @Override public void run() { Toast.makeText(getApplicationContext(), "Error reproducció", Toast.LENGTH_SHORT).show(); }
+            // Solo después de 3 fallos reales, pasar a la siguiente
+            new Handler(Looper.getMainLooper()).post(() -> {
+                Toast.makeText(getApplicationContext(), "Error reproducció", Toast.LENGTH_SHORT).show();
+                playNext();
             });
             if (callback != null) callback.onPlaybackStateChanged(false);
         }
@@ -262,8 +275,11 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
             @Override public void onSkipToPrevious() { super.onSkipToPrevious(); playPrev(); }
             @Override public void onSeekTo(long pos) {
                 super.onSeekTo(pos);
-                if(mediaPlayer != null) mediaPlayer.seekTo((int) pos);
-                updateNotification();
+                if (mediaPlayer != null) {
+                    failureCount = 0;
+                    mediaPlayer.seekTo((int) pos);
+                    updateNotification();
+                }
             }
             @Override
             public boolean onMediaButtonEvent(Intent mediaButtonEvent) {
@@ -569,7 +585,12 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
     public boolean isPlaying() { return mediaPlayer != null && mediaPlayer.isPlaying(); }
     public int getCurrentPosition() { return mediaPlayer != null ? mediaPlayer.getCurrentPosition() : 0; }
     public int getDuration() { return mediaPlayer != null ? mediaPlayer.getDuration() : 0; }
-    public void seekTo(int pos) { if(mediaPlayer != null) mediaPlayer.seekTo(pos); }
+    public void seekTo(int pos) {
+        if (mediaPlayer != null) {
+            failureCount = 0;
+            mediaPlayer.seekTo(pos);
+        }
+    }
     public MusicItem getCurrentSong() { return (currentIndex != -1 && !playlist.isEmpty()) ? playlist.get(currentIndex) : null; }
     public void setCallback(OnSongChangedListener callback) { this.callback = callback; }
 

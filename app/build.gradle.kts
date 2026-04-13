@@ -10,8 +10,8 @@ android {
         applicationId = "com.example.resonode"
         minSdk = 19
         targetSdk = 34
-        versionCode = 33
-        versionName = "2.2"
+        versionCode = 34
+        versionName = "2.3"
 
         multiDexEnabled = true
         vectorDrawables.useSupportLibrary = true
