@@ -68,7 +68,6 @@ public class SettingsActivity extends AppCompatActivity {
     private ImageView ivProfile;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
-    // Lògica per a rebre la foto de la galeria
     private final ActivityResultLauncher<Intent> pickProfileLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
@@ -76,7 +75,6 @@ public class SettingsActivity extends AppCompatActivity {
                     Uri imageUri = result.getData().getData();
 
                     if (imageUri != null) {
-                        // Concedir permís persistent per a que la foto no desaparega en reiniciar
                         try {
                             getContentResolver().takePersistableUriPermission(imageUri,
                                     Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -84,13 +82,11 @@ public class SettingsActivity extends AppCompatActivity {
                             e.printStackTrace();
                         }
 
-                        // Guardar la ruta en SharedPreferences
                         getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
                                 .edit()
                                 .putString("profile_pic_uri", imageUri.toString())
                                 .apply();
 
-                        // Actualitzar la imatge en la pantalla actual
                         loadProfileImage(imageUri.toString());
                         Toast.makeText(this, "Foto de perfil actualitzada!", Toast.LENGTH_SHORT).show();
                     }
@@ -103,7 +99,6 @@ public class SettingsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
 
-        // 1. Configuració de la Toolbar
         Toolbar toolbar = findViewById(R.id.toolbar_settings);
         setSupportActionBar(toolbar);
         if (getSupportActionBar() != null) {
@@ -113,18 +108,15 @@ public class SettingsActivity extends AppCompatActivity {
 
         session = new SessionManager(this);
 
-        // 2. Inicialització de la secció Perfil
         ivProfile = findViewById(R.id.iv_settings_profile);
         Button btnChangePhoto = findViewById(R.id.btn_change_photo);
 
-        // Carregar foto guardada si existeix
         String currentUri = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
                 .getString("profile_pic_uri", null);
         loadProfileImage(currentUri);
 
         btnChangePhoto.setOnClickListener(v -> openGallery());
 
-        // 3. Inicialització de la resta de components
         tvDeviceInfo = findViewById(R.id.tv_device_info);
         tvOtherLabel = findViewById(R.id.tv_other_devices_label);
         llDevicesList = findViewById(R.id.ll_devices_list);
@@ -138,23 +130,18 @@ public class SettingsActivity extends AppCompatActivity {
         rbPrivate = findViewById(R.id.rb_private);
         tvVersion = findViewById(R.id.tv_version);
 
-        // 4. Configuració dels Spinners d'estil
         setupSpinners();
 
-        // 5. Càrrega de dades del dispositiu i llista vinculada
         String currentModel = session.getDeviceModel();
         tvDeviceInfo.setText(currentModel);
         fetchLinkedDevices(currentModel);
 
-        // 6. Emmagatzematge i Equalitzador
         calculateStorageUsage();
         btnClearMusic.setOnClickListener(v -> showClearConfirmation());
         btnOpenEq.setOnClickListener(v -> openEqualizer());
 
-        // 7. Configuració de ResoNode Wrapped
         setupWrappedLogic();
 
-        // 8. Versió de l'App
         try {
             PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
             tvVersion.setText("ResoNode v" + pInfo.versionName);
@@ -201,7 +188,6 @@ public class SettingsActivity extends AppCompatActivity {
         adapterColors.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinColor.setAdapter(adapterColors);
 
-        // Carregar seleccions guardades
         String currentPlay = prefs.getString("play_style", "hud");
         String currentNav = prefs.getString("nav_style", "hud");
         String currentColor = prefs.getString("icon_color", "resonode");
@@ -407,5 +393,11 @@ public class SettingsActivity extends AppCompatActivity {
     public boolean onSupportNavigateUp() {
         onBackPressed();
         return true;
+    }
+
+    @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.hold, R.anim.slide_down_exit);
     }
 }

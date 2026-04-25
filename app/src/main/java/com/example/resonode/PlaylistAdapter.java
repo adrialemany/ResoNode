@@ -108,23 +108,8 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
         else infoText = (item.getArtist() != null && !item.getArtist().isEmpty() && !item.getArtist().equals("ResoNode")) ? item.getArtist() : "Cançó";
         holder.tvArtist.setText(infoText);
 
-        String onlineUrlToTry = null;
-        if (item.getPath().startsWith("/")) {
-            String originalServerPath = offlineDB.getServerPathForLocalFile(item.getPath());
-            if (originalServerPath != null) {
-                try {
-                    onlineUrlToTry = Config.SERVER_URL + "/cover?username=" + currentUsername + "&path=" + URLEncoder.encode(originalServerPath, "UTF-8");
-                } catch (Exception e) {}
-            }
-        } else {
-            try {
-                onlineUrlToTry = Config.SERVER_URL + "/cover?username=" + currentUsername + "&path=" + URLEncoder.encode(item.getPath(), "UTF-8");
-            } catch (Exception e) {}
-        }
-
         File backupCover = null;
         File offlineDir = context.getDir("offline_music", Context.MODE_PRIVATE);
-
         String coverNameTarget = item.isFolder() ? item.getName() : currentPath;
         if (!coverNameTarget.isEmpty()) {
             String safeName = "cover_" + coverNameTarget.replaceAll("[^a-zA-Z0-9.-]", "_") + ".jpg";
@@ -135,24 +120,60 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
         holder.ivIcon.setVisibility(View.VISIBLE);
         holder.tvIcon.setVisibility(View.GONE);
 
-        if (onlineUrlToTry != null) {
-            Glide.with(context)
-                    .load(onlineUrlToTry)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .error(Glide.with(context).load(backupCover))
-                    .placeholder(R.mipmap.ic_launcher)
-                    .into(holder.ivIcon);
-        } else if (backupCover != null) {
-            Glide.with(context).load(backupCover).circleCrop().into(holder.ivIcon);
+        if (item.getPath().startsWith("content://")) {
+            byte[] embeddedArt = getEmbeddedArt(item.getPath());
+            if (embeddedArt != null) {
+                Glide.with(context)
+                        .load(embeddedArt)
+                        .placeholder(R.mipmap.ic_launcher)
+                        .into(holder.ivIcon);
+            } else {
+                String playlistCoverUrl = null;
+                if (!currentPath.isEmpty()) {
+                    try {
+                        playlistCoverUrl = Config.SERVER_URL + "/cover?username=" + currentUsername + "&path=" + URLEncoder.encode(currentPath, "UTF-8");
+                    } catch (Exception e) {}
+                }
+                Glide.with(context)
+                        .load(playlistCoverUrl)
+                        .diskCacheStrategy(DiskCacheStrategy.ALL)
+                        .error(Glide.with(context).load(backupCover))
+                        .placeholder(R.mipmap.ic_launcher)
+                        .into(holder.ivIcon);
+            }
         } else {
-            holder.ivIcon.setVisibility(View.GONE);
-            holder.tvIcon.setVisibility(View.VISIBLE);
-            String emoji = item.isFolder() ? (mode == MODE_VAULT && !item.getPath().contains("/") ? "👤" : "💿") : "🎵";
-            if(item.isFolder() && mode != MODE_VAULT) emoji = "📁";
-            holder.tvIcon.setText(emoji);
+            String onlineUrlToTry = null;
+            if (item.getPath().startsWith("/")) {
+                String originalServerPath = offlineDB.getServerPathForLocalFile(item.getPath());
+                if (originalServerPath != null) {
+                    try {
+                        onlineUrlToTry = Config.SERVER_URL + "/cover?username=" + currentUsername + "&path=" + URLEncoder.encode(originalServerPath, "UTF-8");
+                    } catch (Exception e) {}
+                }
+            } else {
+                try {
+                    onlineUrlToTry = Config.SERVER_URL + "/cover?username=" + currentUsername + "&path=" + URLEncoder.encode(item.getPath(), "UTF-8");
+                } catch (Exception e) {}
+            }
+
+            if (onlineUrlToTry != null) {
+                Glide.with(context)
+                        .load(onlineUrlToTry)
+                        .diskCacheStrategy(DiskCacheStrategy.ALL)
+                        .error(Glide.with(context).load(backupCover))
+                        .placeholder(R.mipmap.ic_launcher)
+                        .into(holder.ivIcon);
+            } else if (backupCover != null) {
+                Glide.with(context).load(backupCover).circleCrop().into(holder.ivIcon);
+            } else {
+                holder.ivIcon.setVisibility(View.GONE);
+                holder.tvIcon.setVisibility(View.VISIBLE);
+                String emoji = item.isFolder() ? (mode == MODE_VAULT && !item.getPath().contains("/") ? "👤" : "💿") : "🎵";
+                if (item.isFolder() && mode != MODE_VAULT) emoji = "📁";
+                holder.tvIcon.setText(emoji);
+            }
         }
 
-        // LÒGICA DE SELECCIÓ I MENÚS (ACTUALITZADA)
         if (isSelectionActive) {
             holder.checkBox.setVisibility(View.VISIBLE);
             holder.btnMore.setVisibility(View.GONE);
@@ -164,7 +185,7 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
                 if (selectedItems.contains(item)) selectedItems.remove(item);
                 else selectedItems.add(item);
                 notifyItemChanged(position);
-                if(selectionListener != null) selectionListener.onSelectionChanged(selectedItems.size());
+                if (selectionListener != null) selectionListener.onSelectionChanged(selectedItems.size());
             });
             holder.checkBox.setOnClickListener(v -> holder.itemView.performClick());
             holder.itemView.setOnLongClickListener(null);
@@ -181,17 +202,28 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
 
             holder.itemView.setOnClickListener(v -> listener.onItemClick(item));
 
-            // Permetre polsació llarga per activar selecció en privades
             if (!item.isFolder()) {
                 holder.itemView.setOnLongClickListener(v -> {
                     selectedItems.add(item);
                     setSelectionMode(true);
-                    if(selectionListener != null) selectionListener.onSelectionChanged(selectedItems.size());
+                    if (selectionListener != null) selectionListener.onSelectionChanged(selectedItems.size());
                     return true;
                 });
             } else {
                 holder.itemView.setOnLongClickListener(null);
             }
+        }
+    }
+
+    private byte[] getEmbeddedArt(String contentUriString) {
+        try {
+            android.media.MediaMetadataRetriever mmr = new android.media.MediaMetadataRetriever();
+            mmr.setDataSource(context, android.net.Uri.parse(contentUriString));
+            byte[] art = mmr.getEmbeddedPicture();
+            mmr.release();
+            return art;
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -213,7 +245,6 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
         }
 
         if (mode == MODE_PRIVATE) {
-            // NOMÉS REANOMENAR/PORTADA SI ÉS CARPETA O ESTEM AL MENÚ INICIAL
             if (currentPath.isEmpty() || item.isFolder()) {
                 popup.getMenu().add("Canviar Portada");
                 popup.getMenu().add("Reanomenar");

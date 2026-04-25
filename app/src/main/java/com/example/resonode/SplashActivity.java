@@ -64,6 +64,7 @@ public class SplashActivity extends AppCompatActivity {
             }
 
             startActivity(intent);
+            overridePendingTransition(R.anim.fade_in_activity, R.anim.fade_out_activity);
             finish(); 
         });
     }

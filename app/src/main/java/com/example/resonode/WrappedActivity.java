@@ -334,4 +334,10 @@ public class WrappedActivity extends AppCompatActivity {
 
         llTopSongs.addView(row);
     }
+
+    @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.hold, R.anim.slide_down_exit);
+    }
 }

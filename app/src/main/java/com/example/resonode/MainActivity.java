@@ -96,12 +96,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private SwipeRefreshLayout swipeRefresh;
     private ImageView ivPlaylistHeader;
 
-    private View miniPlayerLayout;
-    private LinearLayout fullPlayerLayout;
-    private TextView tvMiniTitle, tvMiniArtist, tvFullTitle, tvFullArtist, tvCurrentTime, tvTotalTime;
-    private ImageButton btnMiniPlay, btnFullPlay, btnNext, btnPrev, btnClosePlayer;
+    private androidx.constraintlayout.widget.ConstraintLayout playerRoot;
+    private TextView tvTitle, tvArtist, tvCurrentTime, tvTotalTime;
+    private ImageButton btnPlay, btnNext, btnPrev, btnClosePlayer;
+    private ImageView ivCover;
     private SeekBar seekBar;
-
+    private boolean isPlayerExpanded = false;
+    private androidx.constraintlayout.widget.ConstraintSet miniSet = new androidx.constraintlayout.widget.ConstraintSet();
+    private androidx.constraintlayout.widget.ConstraintSet fullSet = new androidx.constraintlayout.widget.ConstraintSet();
     private SessionManager session;
     private PlaylistAdapter adapter;
     private List<MusicItem> musicList = new ArrayList<>();
@@ -113,6 +115,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private boolean isBound = false;
     private boolean isRetryingConnection = false;
     private boolean isShuffle = false;
+    private boolean needsUrlRefresh = false;
     private Handler seekBarHandler = new Handler();
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -201,7 +204,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             if (savedSong != null) {
                 updatePlayerUI(savedSong, musicService.isPlaying());
                 if (!musicService.isPlaying()) updatePlayIcons(false);
-                fullPlayerLayout.setVisibility(View.GONE);
+                isPlayerExpanded = false;
+                miniSet.applyTo(playerRoot);
             }
 
             handlePendingIntent();
@@ -248,6 +252,41 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     );
 
     @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putBoolean("player_expanded", isPlayerExpanded);
+    }
+
+    private void syncExpandedUI() {
+        if (isPlayerExpanded) {
+            float density = getResources().getDisplayMetrics().density;
+
+            fullSet.applyTo(playerRoot);
+
+            btnPlay.getLayoutParams().width = (int) (100 * density);
+            btnPlay.getLayoutParams().height = (int) (100 * density);
+            btnNext.getLayoutParams().width = (int) (40 * density);
+            btnNext.getLayoutParams().height = (int) (40 * density);
+            btnPrev.getLayoutParams().width = (int) (40 * density);
+            btnPrev.getLayoutParams().height = (int) (40 * density);
+
+            btnPlay.setPadding(0, 0, 0, 0);
+            btnNext.setPadding(0, 0, 0, 0);
+            btnPrev.setPadding(0, 0, 0, 0);
+            btnPlay.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            btnNext.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            btnPrev.setScaleType(ImageView.ScaleType.FIT_CENTER);
+
+            tvTitle.setTextSize(21);
+            tvArtist.setTextSize(15);
+            tvCurrentTime.setTextSize(14);
+            tvTotalTime.setTextSize(14);
+
+            playerRoot.requestLayout();
+        }
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
@@ -281,6 +320,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         setupUI();
         setupPlayer();
+        if (savedInstanceState != null) {
+            isPlayerExpanded = savedInstanceState.getBoolean("player_expanded", false);
+            if (isPlayerExpanded) {
+                playerRoot.setVisibility(View.VISIBLE);
+                playerRoot.post(() -> syncExpandedUI());
+            }
+        }
         updatePlayerIcons();
 
         Intent intent = new Intent(this, MusicService.class);
@@ -380,6 +426,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                 else adapter.setMode(PlaylistAdapter.MODE_PRIVATE);
 
                                 adapter.notifyDataSetChanged();
+                                mainHandler.postDelayed(() -> tvStatus.setVisibility(View.GONE), 3000);
                             } catch (Throwable t) {
                                 tvStatus.setText("Error visual: " + t.getMessage());
                                 tvStatus.setVisibility(View.VISIBLE);
@@ -441,38 +488,20 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void attemptServerRediscovery(final String pendingFolderPath) {
-        ServerDiscovery.findServerUrl(new ServerDiscovery.DiscoveryCallback() {
+        UrlFetcher.fetchLatestUrl(new UrlFetcher.UrlCallback() {
             @Override
-            public void onSuccess(final String newUrl) {
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (newUrl != null && !newUrl.isEmpty()) {
-                            Config.SERVER_URL = newUrl;
-
-                            getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
-                                    .edit()
-                                    .putString("last_server_url", newUrl)
-                                    .apply();
-
-                            Toast.makeText(MainActivity.this, "Servidor trobat! Reconnectant...", Toast.LENGTH_SHORT).show();
-
-                            fetchMusicContent(Config.SERVER_URL, pendingFolderPath);
-                        } else {
-                            handleDiscoveryFailure(pendingFolderPath);
-                        }
-                    }
+            public void onUrlFound(final String newUrl) {
+                runOnUiThread(() -> {
+                    Config.SERVER_URL = newUrl;
+                    getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
+                            .edit().putString("last_server_url", newUrl).apply();
+                    Toast.makeText(MainActivity.this, "Servidor trobat! Reconnectant...", Toast.LENGTH_SHORT).show();
+                    fetchMusicContent(Config.SERVER_URL, pendingFolderPath);
                 });
             }
-
             @Override
-            public void onFailure(Exception e) {
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        handleDiscoveryFailure(pendingFolderPath);
-                    }
-                });
+            public void onError(Exception e) {
+                runOnUiThread(() -> handleDiscoveryFailure(pendingFolderPath));
             }
         });
     }
@@ -486,6 +515,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void loadOfflineContent(final String folderPath) {
+        needsUrlRefresh = true;
         final List<MusicItem> offlineItems = new ArrayList<>();
         final String displayTitle;
 
@@ -569,7 +599,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void updatePlayerUI(MusicItem song, boolean isPlaying) {
-        miniPlayerLayout.setVisibility(View.VISIBLE);
+        playerRoot.setVisibility(View.VISIBLE);
 
         String cleanTitle = song.getName()
                 .replace(".mp3", "").replace(".MP3", "")
@@ -581,20 +611,36 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             else artistName = "ResoNode Music";
         }
 
-        tvMiniTitle.setText(cleanTitle);
-        tvFullTitle.setText(cleanTitle);
-        tvMiniArtist.setText(artistName);
-        tvFullArtist.setText(artistName);
+        tvTitle.setText(cleanTitle);
+        tvArtist.setText(artistName);
 
         updatePlayIcons(isPlaying);
-
-        ImageView fullCover = findViewById(R.id.iv_full_cover);
-        ImageView realMiniCover = findViewById(R.id.iv_mini_cover);
 
         String urlToTry = null;
         File localBackup = null;
 
-        if (song.getPath().startsWith("/")) {
+        if (song.getPath().startsWith("content://")) {
+            android.media.MediaMetadataRetriever mmr = new android.media.MediaMetadataRetriever();
+            try {
+                mmr.setDataSource(this, Uri.parse(song.getPath()));
+                byte[] embeddedArt = mmr.getEmbeddedPicture();
+                if (embeddedArt != null) {
+                    if (ivCover != null)
+                        Glide.with(this).load(embeddedArt).placeholder(R.mipmap.ic_launcher).into(ivCover);
+                    return;
+                }
+            } catch (Exception e) {
+            } finally {
+                try {
+                    mmr.release();
+                } catch (Exception e) {
+                }
+            }
+            try {
+                urlToTry = Config.SERVER_URL + "/cover?username=" + session.getUsername() + "&path=" + URLEncoder.encode(currentPath, "UTF-8");
+            } catch (Exception e) {
+            }
+        } else if (song.getPath().startsWith("/")) {
             if (offlineDB != null) {
                 String originalPath = offlineDB.getServerPathForLocalFile(song.getPath());
                 if (originalPath != null) {
@@ -624,22 +670,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             } catch (Exception e) {}
         }
 
-        if (fullCover != null) {
+        if (ivCover != null) {
             Glide.with(this)
                     .load(urlToTry)
+                    .override(800, 800)
                     .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .error(Glide.with(this).load(localBackup))
+                    .error(Glide.with(this).load(localBackup).override(800, 800))
                     .placeholder(R.mipmap.ic_launcher)
-                    .into(fullCover);
-        }
-
-        if (realMiniCover != null) {
-            Glide.with(this)
-                    .load(urlToTry)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .error(Glide.with(this).load(localBackup))
-                    .placeholder(R.mipmap.ic_launcher)
-                    .into(realMiniCover);
+                    .into(ivCover);
         }
     }
 
@@ -695,7 +733,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         tvStatus = findViewById(R.id.tv_status);
         tvToolbarAction = findViewById(R.id.tv_toolbar_action);
         btnSearch = findViewById(R.id.btn_search);
-        // NOU: Inicialitzem el botó de selecció massiva
         btnBulkMore = findViewById(R.id.btn_bulk_more);
 
         recyclerView = findViewById(R.id.recycler_view_playlists);
@@ -705,12 +742,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         swipeRefresh.setColorSchemeColors(0xFF1DB954);
-        swipeRefresh.setOnRefreshListener(() -> fetchMusicContent(Config.SERVER_URL, currentPath));
+        swipeRefresh.setOnRefreshListener(() -> {
+            isRetryingConnection = false;
+            fetchMusicContent(Config.SERVER_URL, currentPath);
+        });
 
         adapter = new PlaylistAdapter(this, musicList, PlaylistAdapter.MODE_PRIVATE,
                 item -> {
                     if (item.isFolder()) {
                         String target = item.getPath().equals("Playlists Públiques") ? "General" : item.getPath();
+                        recyclerView.startAnimation(android.view.animation.AnimationUtils.loadAnimation(MainActivity.this, R.anim.slide_in_right));
                         fetchMusicContent(Config.SERVER_URL, target);
                     } else {
                         currentSongIndex = musicList.indexOf(item);
@@ -732,19 +773,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 }
         );
 
-        // NOU: Lògica de selecció actualitzada per a mostrar els 3 puntets quan toque
         adapter.setOnSelectionChangedListener(count -> {
             if (count > 0) {
                 btnSearch.setVisibility(View.GONE);
                 fabAdd.hide();
 
-                // Si estem en una llista privada (on es pot esborrar), mostrem 3 punts
                 if (adapter.getMode() == PlaylistAdapter.MODE_PRIVATE) {
                     btnBulkMore.setVisibility(View.VISIBLE);
                     tvToolbarAction.setVisibility(View.VISIBLE);
                     tvToolbarAction.setText(count + " sel.");
                 } else {
-                    // Si és la Pública, només mostrar "AFEGIR"
                     btnBulkMore.setVisibility(View.GONE);
                     tvToolbarAction.setVisibility(View.VISIBLE);
                     tvToolbarAction.setText("AFEGIR (" + count + ")");
@@ -759,10 +797,30 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         recyclerView.setAdapter(adapter);
 
-        fabAdd.setOnClickListener(v -> handleFabClick());
-        btnSearch.setOnClickListener(v -> searchLauncher.launch(new Intent(MainActivity.this, SearchActivity.class)));
+        recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
+                if (!currentPath.isEmpty()) return;
+                if (dy > 8) fabAdd.hide();
+                else if (dy < -8) fabAdd.show();
+            }
 
-        // Seguirà servint per afegir al polsar el text groc
+            @Override
+            public void onScrollStateChanged(@NonNull RecyclerView rv, int newState) {
+                if (newState == RecyclerView.SCROLL_STATE_IDLE && currentPath.isEmpty()) {
+                    LinearLayoutManager lm = (LinearLayoutManager) rv.getLayoutManager();
+                    if (lm != null && lm.findFirstCompletelyVisibleItemPosition() == 0)
+                        fabAdd.show();
+                }
+            }
+        });
+
+        fabAdd.setOnClickListener(v -> handleFabClick());
+
+        btnSearch.setOnClickListener(v -> {
+            searchLauncher.launch(new Intent(MainActivity.this, SearchActivity.class));
+        });
+
         tvToolbarAction.setOnClickListener(v -> {
             List<MusicItem> selected = adapter.getSelectedItems();
             if (!selected.isEmpty()) {
@@ -770,7 +828,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         });
 
-        // NOU: Clic als 3 puntets globals per a múltiples cançons
         btnBulkMore.setOnClickListener(v -> {
             android.widget.PopupMenu popup = new android.widget.PopupMenu(MainActivity.this, v);
             popup.getMenu().add("Afegir a Playlist");
@@ -794,23 +851,38 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 .setTitle("Borrar " + items.size() + " cançons?")
                 .setMessage("Aquesta acció eliminarà les cançons seleccionades de la playlist.")
                 .setPositiveButton("SI", (dialog, which) -> {
+
+                    if (offlineDB == null) offlineDB = new OfflineDB(MainActivity.this);
+                    boolean hasLocals = false;
+                    for (MusicItem i : items) {
+                        if (i.getPath().startsWith("content://")) {
+                            offlineDB.removeLocalSong(i.getPath(), currentPath);
+                            hasLocals = true;
+                        }
+                    }
+
+                    if (hasLocals) {
+                        Toast.makeText(MainActivity.this, "Cançons locals eliminades", Toast.LENGTH_SHORT).show();
+                    }
+
                     executor.execute(() -> {
                         for (MusicItem i : items) {
-                            JSONObject j = new JSONObject();
-                            try {
-                                j.put("username", session.getUsername());
-                                j.put("path", i.getPath());
-                                RequestBody body = RequestBody.create(MediaType.parse("application/json"), j.toString());
-                                Request request = new Request.Builder()
-                                        .url(Config.SERVER_URL + "/playlist/delete_item")
-                                        .header("x-secret-key", Config.API_SECRET_KEY)
-                                        .post(body)
-                                        .build();
-                                client.newCall(request).execute();
-                            } catch (Exception e) {}
+                            if (!i.getPath().startsWith("content://")) {
+                                JSONObject j = new JSONObject();
+                                try {
+                                    j.put("username", session.getUsername());
+                                    j.put("path", i.getPath());
+                                    RequestBody body = RequestBody.create(MediaType.parse("application/json"), j.toString());
+                                    Request request = new Request.Builder()
+                                            .url(Config.SERVER_URL + "/playlist/delete_item")
+                                            .header("x-secret-key", Config.API_SECRET_KEY)
+                                            .post(body)
+                                            .build();
+                                    client.newCall(request).execute();
+                                } catch (Exception e) {}
+                            }
                         }
                         mainHandler.post(() -> {
-                            Toast.makeText(MainActivity.this, "S'han eliminat les cançons", Toast.LENGTH_SHORT).show();
                             adapter.setSelectionMode(false);
                             fetchMusicContent(Config.SERVER_URL, currentPath);
                         });
@@ -912,71 +984,47 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void setupPlayer() {
-        miniPlayerLayout = findViewById(R.id.mini_player_layout);
-        tvMiniTitle = findViewById(R.id.tv_mini_title); tvMiniArtist = findViewById(R.id.tv_mini_artist);
-        btnMiniPlay = findViewById(R.id.btn_mini_play); fullPlayerLayout = findViewById(R.id.full_player_layout);
-        tvFullTitle = findViewById(R.id.tv_full_title);
-        tvFullArtist = findViewById(R.id.tv_full_artist);
-        tvCurrentTime = findViewById(R.id.tv_current_time); tvTotalTime = findViewById(R.id.tv_total_time);
-        btnFullPlay = findViewById(R.id.btn_full_play); btnClosePlayer = findViewById(R.id.btn_close_player);
-        seekBar = findViewById(R.id.seek_bar); btnNext = findViewById(R.id.btn_next); btnPrev = findViewById(R.id.btn_prev);
-
-        try {
-            android.graphics.drawable.Drawable progressDrawable = seekBar.getProgressDrawable().mutate();
-            progressDrawable.setColorFilter(0xFFF2B327, android.graphics.PorterDuff.Mode.SRC_IN);
-            seekBar.setProgressDrawable(progressDrawable);
-
-            if (Build.VERSION.SDK_INT >= 16) {
-                android.graphics.drawable.Drawable thumb = seekBar.getThumb().mutate();
-                thumb.setColorFilter(0xFFF2B327, android.graphics.PorterDuff.Mode.SRC_IN);
-                seekBar.setThumb(thumb);
-            }
-        } catch (Exception e) {}
-
-        miniPlayerLayout.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { fullPlayerLayout.setVisibility(View.VISIBLE); }
-        });
-        btnClosePlayer.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { fullPlayerLayout.setVisibility(View.GONE); }
-        });
+        playerRoot = findViewById(R.id.player_root);
+        ivCover = findViewById(R.id.iv_cover);
+        tvTitle = findViewById(R.id.tv_title);
+        tvArtist = findViewById(R.id.tv_artist);
+        btnPlay = findViewById(R.id.btn_play);
+        btnClosePlayer = findViewById(R.id.btn_close_player);
+        seekBar = findViewById(R.id.seek_bar);
+        tvCurrentTime = findViewById(R.id.tv_current_time);
+        tvTotalTime = findViewById(R.id.tv_total_time);
+        btnNext = findViewById(R.id.btn_next);
+        btnPrev = findViewById(R.id.btn_prev);
         btnShuffle = findViewById(R.id.btn_shuffle);
-
-        btnShuffle.setOnClickListener(v -> {
-            if (isBound && musicService != null) {
-                musicService.toggleShuffle();
-                updateShuffleUI();
-            }
-        });
-
         btnRepeat = findViewById(R.id.btn_repeat);
-        btnShuffle = findViewById(R.id.btn_shuffle);
 
-        btnRepeat.setOnClickListener(v -> {
-            if (isBound && musicService != null) {
-                musicService.toggleRepeatOne();
-                updateRepeatUI();
-            }
-        });
+        miniSet.clone(playerRoot);
+        fullSet.clone(this, R.layout.player_expanded);
 
-        btnShuffle.setOnClickListener(v -> {
-            if (isBound && musicService != null) {
-                musicService.toggleShuffle();
-                updateShuffleUI();
-            }
-        });
+        playerRoot.setOnClickListener(null);
+        playerRoot.setClickable(false);
 
-        View.OnClickListener playToggle = new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if(isBound) {
-                    if(musicService.isPlaying()) musicService.pauseMusic();
-                    else musicService.resumeMusic();
-                }
+        View.OnClickListener expandListener = v -> {
+            if(!isPlayerExpanded) {
+                isPlayerExpanded = true;
+                applyPlayerState(true, true);
             }
         };
-        btnMiniPlay.setOnClickListener(playToggle); btnFullPlay.setOnClickListener(playToggle);
-        btnNext.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { if(isBound) musicService.playNext(); } });
-        btnPrev.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { if(isBound) musicService.playPrev(); } });
+
+        findViewById(R.id.bg_mini).setOnClickListener(expandListener);
+        ivCover.setOnClickListener(expandListener);
+        tvTitle.setOnClickListener(expandListener);
+        tvArtist.setOnClickListener(expandListener);
+
+        btnClosePlayer.setOnClickListener(v -> closePlayer());
+
+        View.OnClickListener playToggle = v -> { if(isBound) { if(musicService.isPlaying()) musicService.pauseMusic(); else musicService.resumeMusic(); } };
+        btnPlay.setOnClickListener(playToggle);
+        btnNext.setOnClickListener(v -> { if(isBound) musicService.playNext(); });
+        btnPrev.setOnClickListener(v -> { if(isBound) musicService.playPrev(); });
+
+        btnShuffle.setOnClickListener(v -> { if (isBound) { musicService.toggleShuffle(); updateShuffleUI(); } });
+        btnRepeat.setOnClickListener(v -> { if (isBound) { musicService.toggleRepeatOne(); updateRepeatUI(); } });
 
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar s, int p, boolean f) { if(f && isBound) musicService.seekTo(p); }
@@ -993,7 +1041,15 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 }
                 seekBarHandler.postDelayed(this, 1000);
             }
-        }; seekBarHandler.post(updateSeek);
+        };
+        seekBarHandler.post(updateSeek);
+    }
+
+    private void closePlayer() {
+        if(isPlayerExpanded) {
+            isPlayerExpanded = false;
+            applyPlayerState(false, true);
+        }
     }
 
     private void updateShuffleUI() {
@@ -1101,7 +1157,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             public void onClick(DialogInterface d, int w) {
                 if(w==0) showCreatePlaylistDialog();
                 else if(w==1) goToGeneralAndSelect();
-                else if(w==2) searchLauncher.launch(new Intent(MainActivity.this, SearchActivity.class));
+                else if(w==2) {
+                    searchLauncher.launch(new Intent(MainActivity.this, SearchActivity.class));
+                }
                 else {
                     Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                     intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -1144,18 +1202,22 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private void logoutUser() {
         session.logoutUser();
         startActivity(new Intent(this, LoginActivity.class));
+        overridePendingTransition(R.anim.fade_in_activity, R.anim.fade_out_activity);
         finish();
     }
 
     @Override
     public void onBackPressed() {
-        if(fullPlayerLayout.getVisibility()==View.VISIBLE) fullPlayerLayout.setVisibility(View.GONE);
+        if(isPlayerExpanded) {
+            closePlayer();
+        }
         else if(drawerLayout.isDrawerOpen(GravityCompat.START)) drawerLayout.closeDrawer(GravityCompat.START);
         else if(!adapter.getSelectedItems().isEmpty()){ adapter.setSelectionMode(false); fabAdd.show(); }
         else if(!currentPath.isEmpty()) {
             File f=new File(currentPath);
             String p=f.getParent();
             if(p==null)p="";
+            recyclerView.startAnimation(android.view.animation.AnimationUtils.loadAnimation(this, R.anim.slide_in_left));
             fetchMusicContent(Config.SERVER_URL, p.replace("\\","/"));
         } else super.onBackPressed();
     }
@@ -1165,9 +1227,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if(i.getItemId()==R.id.nav_home) fetchMusicContent(Config.SERVER_URL,"");
         else if (i.getItemId() == R.id.nav_wrapped) {
             startActivity(new Intent(MainActivity.this, WrappedActivity.class));
+            overridePendingTransition(R.anim.slide_up_enter, R.anim.hold);
         }
         else if (i.getItemId() == R.id.nav_settings) {
             startActivity(new Intent(MainActivity.this, SettingsActivity.class));
+            overridePendingTransition(R.anim.slide_up_enter, R.anim.hold);
         }
         else if(i.getItemId()==R.id.nav_logout) logoutUser();
         drawerLayout.closeDrawer(GravityCompat.START);
@@ -1251,18 +1315,26 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 .setTitle("Borrar")
                 .setPositiveButton("SI", new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface d, int w) {
-                        JSONObject j=new JSONObject();
-                        try{
-                            j.put("username",session.getUsername());
-                            j.put("path",i.getPath());
-                        }catch(Exception e){}
-                        postJson("/playlist/delete_item",j.toString(), new Runnable() {
-                            @Override public void run() {
-                                mainHandler.post(new Runnable() {
-                                    @Override public void run() { fetchMusicContent(Config.SERVER_URL,currentPath); }
-                                });
-                            }
-                        });
+
+                        if (i.getPath().startsWith("content://")) {
+                            if (offlineDB == null) offlineDB = new OfflineDB(MainActivity.this);
+                            offlineDB.removeLocalSong(i.getPath(), currentPath);
+                            Toast.makeText(MainActivity.this, "Cançó local eliminada", Toast.LENGTH_SHORT).show();
+                            fetchMusicContent(Config.SERVER_URL, currentPath);
+                        } else {
+                            JSONObject j=new JSONObject();
+                            try{
+                                j.put("username",session.getUsername());
+                                j.put("path",i.getPath());
+                            }catch(Exception e){}
+                            postJson("/playlist/delete_item",j.toString(), new Runnable() {
+                                @Override public void run() {
+                                    mainHandler.post(new Runnable() {
+                                        @Override public void run() { fetchMusicContent(Config.SERVER_URL,currentPath); }
+                                    });
+                                }
+                            });
+                        }
                     }
                 }).show();
     }
@@ -1324,22 +1396,17 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             JSONArray a = new JSONArray();
             a.put(item.getPath());
 
-            // TRUC: Enviem l'array amb els dos noms ("items" i "songs")
-            // Així el teu servidor segur que ho llig correctament sense donar error
             j.put("items", a);
             j.put("songs", a);
 
-            // Tria la ruta de l'API correcta
             String endpoint = item.isFolder() ? "/playlist/add_from_vault" : "/playlist/add";
 
             postJson(endpoint, j.toString(), new Runnable() {
                 @Override public void run() {
                     mainHandler.post(new Runnable() {
                         @Override public void run() {
-                            // 1. Mostrem el missatge de confirmació
                             Toast.makeText(MainActivity.this, "Afegit a " + playlistName, Toast.LENGTH_SHORT).show();
 
-                            // 2. Com que NO cridem a fetchMusicContent(""), la pantalla es queda on estava!
                         }
                     });
                 }
@@ -1444,7 +1511,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (version > lastSeenLogVersion) {
             final int ver = version;
             new AlertDialog.Builder(this)
-                    .setTitle("¡Novetats v" + version + "!")
+                    .setTitle("Novetats v" + version + "!")
                     .setMessage(logText)
                     .setCancelable(false)
                     .setPositiveButton("GENIAL", new DialogInterface.OnClickListener() {
@@ -1457,26 +1524,91 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void downloadAndInstallUpdate() {
-        ProgressDialog pd = new ProgressDialog(this);
-        pd.setMessage("Descargando...");
-        pd.show();
-        final ProgressDialog finalPd = pd;
+        Toast.makeText(this, "Descarregant actualització en segon pla...", Toast.LENGTH_LONG).show();
+
+        final android.app.NotificationManager notificationManager = (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        final String channelId = "UpdateChannel";
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            android.app.NotificationChannel channel = new android.app.NotificationChannel(
+                    channelId, "Actualitzacions", android.app.NotificationManager.IMPORTANCE_HIGH);
+            notificationManager.createNotificationChannel(channel);
+        }
+
+        final androidx.core.app.NotificationCompat.Builder builder = new androidx.core.app.NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle("Descarregant ResoNode")
+                .setContentText("Calculant grandària...")
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setProgress(100, 0, true);
+
+        final int notificationId = 999;
+        notificationManager.notify(notificationId, builder.build());
+
         executor.execute(new Runnable() {
             @Override public void run() {
                 try {
                     Request request = new Request.Builder().url(Config.SERVER_URL + "/update/download").build();
                     Response response = client.newCall(request).execute();
-                    if(!response.isSuccessful()) throw new Exception("Error");
-                    File f = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "update.apk");
+                    if(!response.isSuccessful()) throw new Exception("Error al descarregar");
+
+                    long totalBytes = response.body().contentLength();
                     InputStream is = response.body().byteStream();
+                    File f = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "update.apk");
                     FileOutputStream fos = new FileOutputStream(f);
-                    byte[] b = new byte[4096]; int l;
-                    while((l=is.read(b))!=-1) fos.write(b,0,l);
+
+                    byte[] b = new byte[8192];
+                    int l;
+                    long downloaded = 0;
+                    int lastProgress = 0;
+
+                    if (totalBytes > 0) {
+                        builder.setProgress(100, 0, false);
+                        notificationManager.notify(notificationId, builder.build());
+                    }
+
+                    while((l = is.read(b)) != -1) {
+                        fos.write(b, 0, l);
+                        downloaded += l;
+
+                        if (totalBytes > 0) {
+                            int progress = (int) ((downloaded * 100L) / totalBytes);
+                            if (progress >= lastProgress + 2) {
+                                lastProgress = progress;
+                                builder.setProgress(100, progress, false)
+                                        .setContentText(progress + "%");
+                                notificationManager.notify(notificationId, builder.build());
+                            }
+                        }
+                    }
                     fos.close(); is.close();
                     final File finalF = f;
-                    mainHandler.post(new Runnable() { @Override public void run() { finalPd.dismiss(); checkPermissionsAndInstall(finalF); } });
+
+                    builder.setContentTitle("Descàrrega completada")
+                            .setContentText("Llest per instal·lar")
+                            .setProgress(0, 0, false)
+                            .setOngoing(false);
+                    notificationManager.notify(notificationId, builder.build());
+
+                    mainHandler.post(new Runnable() {
+                        @Override public void run() {
+                            checkPermissionsAndInstall(finalF);
+                        }
+                    });
+
                 } catch(Exception e) {
-                    mainHandler.post(new Runnable() { @Override public void run() { finalPd.dismiss(); Toast.makeText(MainActivity.this, "Error update", Toast.LENGTH_SHORT).show(); } });
+                    builder.setContentTitle("Error de descàrrega")
+                            .setContentText("No s'ha pogut baixar l'actualització")
+                            .setProgress(0, 0, false)
+                            .setOngoing(false);
+                    notificationManager.notify(notificationId, builder.build());
+
+                    mainHandler.post(new Runnable() {
+                        @Override public void run() {
+                            Toast.makeText(MainActivity.this, "Error actualitzant", Toast.LENGTH_SHORT).show();
+                        }
+                    });
                 }
             }
         });
@@ -1642,8 +1774,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             default: tintColor = 0xFFF2B327; break;
         }
 
-        if (btnMiniPlay != null) btnMiniPlay.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
-        if (btnFullPlay != null) btnFullPlay.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+        if (btnPlay != null) btnPlay.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
         if (btnNext != null) btnNext.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
         if (btnPrev != null) btnPrev.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
         if (btnClosePlayer != null) {
@@ -1691,8 +1822,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
     private void updatePlayIcons(boolean isPlaying) {
         int resId = isPlaying ? pauseIconRes : playIconRes;
-        if (btnMiniPlay != null) btnMiniPlay.setImageResource(resId);
-        if (btnFullPlay != null) btnFullPlay.setImageResource(resId);
+        if (btnPlay != null) btnPlay.setImageResource(resId);
     }
 
     private String[] getAudioMetadata(Uri uri) {
@@ -1740,8 +1870,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 currentSongIndex = 0;
                 musicService.playUrl(audioUri.toString(), temp, 0, session.getUsername());
 
-                if (fullPlayerLayout != null) {
-                    fullPlayerLayout.setVisibility(View.VISIBLE);
+                if (playerRoot != null && !isPlayerExpanded) {
+                    fullSet.applyTo(playerRoot);
+                    isPlayerExpanded = true;
                 }
             }
             pendingIntentToHandle = null;
@@ -1760,7 +1891,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     public void onConfigurationChanged(@NonNull android.content.res.Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
 
-        boolean wasFullPlayerOpen = (fullPlayerLayout != null && fullPlayerLayout.getVisibility() == View.VISIBLE);
+        boolean wasFullPlayerOpen = isPlayerExpanded;
         int currentAdapterMode = (adapter != null) ? adapter.getMode() : PlaylistAdapter.MODE_PRIVATE;
 
         setContentView(R.layout.activity_main);
@@ -1773,8 +1904,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         if (adapter != null) adapter.setMode(currentAdapterMode);
 
-        if (wasFullPlayerOpen && fullPlayerLayout != null) {
-            fullPlayerLayout.setVisibility(View.VISIBLE);
+        if (wasFullPlayerOpen && playerRoot != null) {
+            isPlayerExpanded = true;
+            playerRoot.setVisibility(View.VISIBLE);
+            playerRoot.post(() -> applyPlayerState(true, false));
         }
 
         if (isBound && musicService != null && musicService.getCurrentSong() != null) {
@@ -1787,6 +1920,59 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (drawerLayout != null) {
             androidx.core.view.ViewCompat.requestApplyInsets(drawerLayout);
         }
+    }
+
+    private void applyPlayerState(boolean expand, boolean animate) {
+        if (animate) {
+            androidx.transition.TransitionSet set = new androidx.transition.TransitionSet()
+                    .addTransition(new androidx.transition.ChangeBounds())
+                    .addTransition(new androidx.transition.Fade().setDuration(200))
+                    .setDuration(450);
+            androidx.transition.TransitionManager.beginDelayedTransition(playerRoot, set);
+        }
+
+        float density = getResources().getDisplayMetrics().density;
+
+        if (expand) {
+            fullSet.constrainWidth(R.id.btn_play, (int) (100 * density));
+            fullSet.constrainHeight(R.id.btn_play, (int) (100 * density));
+            fullSet.constrainWidth(R.id.btn_next, (int) (50 * density));
+            fullSet.constrainHeight(R.id.btn_next, (int) (50 * density));
+            fullSet.constrainWidth(R.id.btn_prev, (int) (50 * density));
+            fullSet.constrainHeight(R.id.btn_prev, (int) (50 * density));
+
+            fullSet.applyTo(playerRoot);
+
+            btnPlay.setPadding(0, 0, 0, 0);
+            btnPlay.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            btnNext.setPadding(0, 0, 0, 0);
+            btnNext.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            btnPrev.setPadding(0, 0, 0, 0);
+            btnPrev.setScaleType(ImageView.ScaleType.FIT_CENTER);
+
+            tvTitle.setTextSize(21);
+            tvArtist.setTextSize(15);
+            tvCurrentTime.setTextSize(14);
+            tvTotalTime.setTextSize(14);
+        } else {
+            miniSet.constrainWidth(R.id.btn_play, (int) (50 * density));
+            miniSet.constrainHeight(R.id.btn_play, (int) (50 * density));
+            miniSet.constrainWidth(R.id.btn_next, (int) (50 * density));
+            miniSet.constrainHeight(R.id.btn_next, (int) (50 * density));
+
+            miniSet.applyTo(playerRoot);
+
+            int miniPadding = (int) (8 * density);
+            btnPlay.setPadding(miniPadding, miniPadding, miniPadding, miniPadding);
+            btnNext.setPadding(miniPadding, miniPadding, miniPadding, miniPadding);
+            btnPrev.setPadding(miniPadding, miniPadding, miniPadding, miniPadding);
+
+            tvTitle.setTextSize(14);
+            tvArtist.setTextSize(11);
+            tvCurrentTime.setTextSize(11);
+            tvTotalTime.setTextSize(11);
+        }
+        playerRoot.requestLayout();
     }
 
     private void showPlaylistSelectorForLocalSong(final Uri audioUri, final String title, final String artist) {

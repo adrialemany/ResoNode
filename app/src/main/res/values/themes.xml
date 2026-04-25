@@ -7,4 +7,12 @@
     <style name="RoundedSquare">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">8dp</item> </style>
+    <style name="RoundedAppearance24dp">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">24dp</item>
+    </style>
+    <style name="RoundedAppearance8dp">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">8dp</item>
+    </style>
 </resources>

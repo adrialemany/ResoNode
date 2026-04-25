@@ -63,6 +63,7 @@ public class SearchActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_search);
+        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
 
         etSearch = findViewById(R.id.et_search);
         btnBack = findViewById(R.id.btn_back);
@@ -80,12 +81,16 @@ public class SearchActivity extends AppCompatActivity {
                         resultIntent.putExtra("path_id", item.getPath());
                         setResult(RESULT_OK, resultIntent);
                         finish();
+                        btnBack.setOnClickListener(v -> finish());
+                        fetchAllArtists();
+                        tvDefaultTitle.setVisibility(View.VISIBLE);
                     }
                 }
         );
         recyclerSearch.setAdapter(adapter);
 
         btnBack.setOnClickListener(v -> finish());
+        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
 
         fetchAllArtists();
         tvDefaultTitle.setVisibility(View.VISIBLE);
@@ -170,7 +175,8 @@ public class SearchActivity extends AppCompatActivity {
         }
 
         setResult(RESULT_OK, resultIntent);
-        finish();
+        super.finish();
+        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
     }
 
     private void fetchAllArtists() {
@@ -224,5 +230,11 @@ public class SearchActivity extends AppCompatActivity {
                 e.printStackTrace();
             }
         });
+    }
+
+    @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
     }
 }

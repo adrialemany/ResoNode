@@ -55,6 +55,12 @@ public class OfflineDB extends SQLiteOpenHelper {
         db.execSQL(CREATE_HISTORY_TABLE);
     }
 
+    public void removeLocalSong(String songPath, String playlistName) {
+        android.database.sqlite.SQLiteDatabase db = this.getWritableDatabase();
+        db.delete(TABLE_SONGS, KEY_SERVER_PATH + " = ? AND " + KEY_PLAYLIST + " = ?", new String[]{songPath, playlistName});
+        db.close();
+    }
+
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_SONGS);
