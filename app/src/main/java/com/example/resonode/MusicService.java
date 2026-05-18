@@ -194,38 +194,33 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
         });
 
         mediaPlayer.setOnCompletionListener(mp -> {
-            long elapsedMs = System.currentTimeMillis() - songStartTime;
-            int songDurationMs = mp.getDuration();
+            int currentPos = 0;
+            int songDurationMs = 0;
+            try {
+                currentPos = mp.getCurrentPosition();
+                songDurationMs = mp.getDuration();
+            } catch (Exception e) {}
 
-            // ✅ Si la canción "terminó" demasiado pronto, fue un error de red
-            // Tolerancia de 3 segundos antes del final real
-            boolean reallyFinished = (songDurationMs <= 0) ||
-                    (elapsedMs >= songDurationMs - 3000);
+            boolean reallyFinished = (songDurationMs <= 0) || (currentPos >= songDurationMs - 5000);
 
             if (!reallyFinished) {
-                // Fue un corte de red, NO era el final → reintentar
-                android.util.Log.w("MusicService", "onCompletion prematuro (red cortada?), reintentando");
+                android.util.Log.w("MusicService", "Tall de xarxa detectat. Reintentant...");
                 handlePlaybackError();
                 return;
             }
 
-            // A partir de aquí, la lógica original de logging y siguiente canción
-            int seconds = (int) (elapsedMs / 1000);
-            int realSongDurationSec = songDurationMs / 1000;
-            if (seconds > realSongDurationSec) seconds = realSongDurationSec;
-
             MusicItem currentItem = getCurrentSong();
-            final int finalSeconds = seconds;
 
-            if (finalSeconds > 30 && currentItem != null) {
+            if (songDurationMs > 30000 && currentItem != null) {
+                final int secondsToLog = songDurationMs / 1000;
                 executor.execute(() -> {
                     OfflineDB db = new OfflineDB(getApplicationContext());
-                    db.logPlay(currentItem.getName(), currentItem.getArtist(), finalSeconds);
+                    db.logPlay(currentItem.getName(), currentItem.getArtist(), secondsToLog);
                     syncHistory(getApplicationContext());
                 });
             }
 
-            failureCount = 0; // ✅ Reset al completar correctamente
+            failureCount = 0;
 
             if (isRepeatOne) {
                 if (currentItem != null) playInternal(currentItem);

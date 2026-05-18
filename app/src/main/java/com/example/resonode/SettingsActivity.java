@@ -99,7 +99,26 @@ public class SettingsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
 
+        SharedPreferences prefs = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE);
+        boolean isPureBlack = prefs.getBoolean("pure_black", false);
+        LinearLayout settingsRoot = findViewById(R.id.settings_root);
+
+        // Agafem la barra i la targeta de perfil
         Toolbar toolbar = findViewById(R.id.toolbar_settings);
+        com.google.android.material.card.MaterialCardView cardProfile = findViewById(R.id.card_profile);
+
+        if (isPureBlack) {
+            getWindow().getDecorView().setBackgroundColor(0xFF000000);
+            if (settingsRoot != null) settingsRoot.setBackgroundColor(0xFF000000);
+            if (toolbar != null) toolbar.setBackgroundColor(0xFF000000);
+            if (cardProfile != null) cardProfile.setCardBackgroundColor(0xFF000000);
+        } else {
+            getWindow().getDecorView().setBackgroundColor(0xFF121212);
+            if (settingsRoot != null) settingsRoot.setBackgroundColor(0xFF121212);
+            if (toolbar != null) toolbar.setBackgroundColor(0xFF191414); // Gris fosc per a la Toolbar
+            if (cardProfile != null) cardProfile.setCardBackgroundColor(0xFF1A1A1A); // Gris fosc per a la Card
+        }
+
         setSupportActionBar(toolbar);
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
@@ -141,6 +160,15 @@ public class SettingsActivity extends AppCompatActivity {
         btnOpenEq.setOnClickListener(v -> openEqualizer());
 
         setupWrappedLogic();
+
+        com.google.android.material.switchmaterial.SwitchMaterial switchPureBlack = findViewById(R.id.switch_pure_black);
+
+        switchPureBlack.setChecked(isPureBlack);
+
+        switchPureBlack.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            prefs.edit().putBoolean("pure_black", isChecked).apply();
+            recreate();
+        });
 
         try {
             PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);

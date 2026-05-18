@@ -81,6 +81,16 @@
             android:visibility="gone"
             app:buttonTint="#F2B327" />
 
+        <com.example.resonode.MiniEqView
+            android:id="@+id/eq_anim"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginEnd="12dp"
+            android:visibility="gone"
+            app:layout_constraintEnd_toStartOf="@id/btn_more"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+
         <ImageView
             android:id="@+id/btn_more"
             android:layout_width="40dp"

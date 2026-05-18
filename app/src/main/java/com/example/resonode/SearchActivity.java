@@ -72,6 +72,22 @@ public class SearchActivity extends AppCompatActivity {
         tvDefaultTitle = findViewById(R.id.tv_default_title);
         recyclerSearch.setLayoutManager(new LinearLayoutManager(this));
 
+        android.content.SharedPreferences prefs = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE);
+        boolean isPureBlack = prefs.getBoolean("pure_black", false);
+
+        int bgColor = isPureBlack ? 0xFF000000 : 0xFF121212;
+
+        getWindow().getDecorView().setBackgroundColor(bgColor);
+
+        android.view.ViewGroup contentRoot = findViewById(android.R.id.content);
+        if (contentRoot != null && contentRoot.getChildCount() > 0) {
+            contentRoot.getChildAt(0).setBackgroundColor(bgColor);
+        }
+
+        if (recyclerSearch != null) {
+            recyclerSearch.setBackgroundColor(0x00000000);
+        }
+
         adapter = new PlaylistAdapter(this, searchResults, PlaylistAdapter.MODE_SEARCH,
                 item -> openContext(item),
                 (item, action) -> {

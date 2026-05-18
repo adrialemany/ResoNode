@@ -27,6 +27,9 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
     public static final int MODE_VAULT = 2;
     public static final int MODE_SEARCH = MODE_VAULT;
 
+    private String playingSongPath = "";
+    private boolean isPlaying = false;
+
     public int getMode() {
         return mode;
     }
@@ -41,6 +44,8 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
     private final OnItemMenuClickListener menuListener;
 
     private OfflineDB offlineDB;
+
+    private int iconColor = 0xFFF2B327;
 
     private final List<MusicItem> selectedItems = new ArrayList<>();
     private OnSelectionChangedListener selectionListener;
@@ -68,6 +73,17 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
         this.mode = newMode;
         this.selectedItems.clear();
         this.isSelectionActive = false;
+        notifyDataSetChanged();
+    }
+
+    public void setPlayingState(String path, boolean playing) {
+        this.playingSongPath = (path != null) ? path : "";
+        this.isPlaying = playing;
+        notifyDataSetChanged();
+    }
+
+    public void setIconColor(int color) {
+        this.iconColor = color;
         notifyDataSetChanged();
     }
 
@@ -193,12 +209,8 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
             holder.checkBox.setVisibility(View.GONE);
             holder.itemView.setBackgroundColor(0x00000000);
 
-            if (mode == MODE_PUBLIC) {
-                holder.btnMore.setVisibility(View.GONE);
-            } else {
-                holder.btnMore.setVisibility(View.VISIBLE);
-                holder.btnMore.setOnClickListener(v -> showPopupMenu(v, item));
-            }
+            holder.btnMore.setVisibility(View.VISIBLE);
+            holder.btnMore.setOnClickListener(v -> showPopupMenu(v, item));
 
             holder.itemView.setOnClickListener(v -> listener.onItemClick(item));
 
@@ -211,6 +223,21 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
                 });
             } else {
                 holder.itemView.setOnLongClickListener(null);
+            }
+        }
+
+        if (!item.isFolder() && item.getPath().equals(playingSongPath)) {
+            holder.tvName.setTextColor(iconColor);
+            if (holder.eqAnim != null) {
+                holder.eqAnim.setColor(iconColor);
+                holder.eqAnim.setVisibility(View.VISIBLE);
+                holder.eqAnim.setPlaying(isPlaying);
+            }
+        } else {
+            holder.tvName.setTextColor(0xFFFFFFFF);
+            if (holder.eqAnim != null) {
+                holder.eqAnim.setVisibility(View.GONE);
+                holder.eqAnim.setPlaying(false);
             }
         }
     }
@@ -230,9 +257,10 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
     private void showPopupMenu(View view, MusicItem item) {
         PopupMenu popup = new PopupMenu(context, view);
 
-        if (mode == MODE_VAULT || mode == MODE_PRIVATE || mode == MODE_SEARCH) {
+        if (mode == MODE_VAULT || mode == MODE_PRIVATE || mode == MODE_SEARCH || mode == MODE_PUBLIC) {
             popup.getMenu().add("Afegir a Playlist");
         }
+        popup.getMenu().add("Compartir");
 
         if (item.isFolder()) {
             boolean isDownloaded = false;
@@ -267,6 +295,7 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
         TextView tvIcon, tvName, tvArtist;
         ImageView btnMore;
         CheckBox checkBox;
+        MiniEqView eqAnim;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -276,6 +305,7 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
             tvArtist = itemView.findViewById(R.id.tv_artist);
             btnMore = itemView.findViewById(R.id.btn_more);
             checkBox = itemView.findViewById(R.id.checkbox_select);
+            eqAnim = itemView.findViewById(R.id.eq_anim);
         }
     }
 }

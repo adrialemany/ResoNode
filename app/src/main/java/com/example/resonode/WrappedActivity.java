@@ -26,6 +26,7 @@ import okhttp3.Callback;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import android.content.SharedPreferences;
 
 public class WrappedActivity extends AppCompatActivity {
 
@@ -43,11 +44,37 @@ public class WrappedActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_wrapped);
+        // --- APLICAR TEMA NEGRE PUR TOTAL AL WRAPPED ---
+        SharedPreferences prefs = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE);
+        boolean isPureBlack = prefs.getBoolean("pure_black", false);
+
+        int bgColor = isPureBlack ? 0xFF000000 : 0xFF121212;
+        int cardColor = isPureBlack ? 0xFF000000 : 0xFF191414; // Un pelet més clar si no és negre pur
+
+        // 1. Fons de la finestra general
+        getWindow().getDecorView().setBackgroundColor(bgColor);
+
+        // 2. El truc de l'arrel: Forcem el primer fill de l'XML a tindre el color correcte
+        android.view.ViewGroup contentRoot = findViewById(android.R.id.content);
+        if (contentRoot != null && contentRoot.getChildCount() > 0) {
+            contentRoot.getChildAt(0).setBackgroundColor(bgColor);
+        }
+
+        // 3. Barra Superior (Toolbar)
+        Toolbar toolbar = findViewById(R.id.toolbar_wrapped);
+        if (toolbar != null) {
+            toolbar.setBackgroundColor(cardColor);
+        }
+
+        // 4. Les pestanyes del període (TabLayout)
+        TabLayout tabLayout = findViewById(R.id.tabs_period);
+        if (tabLayout != null) {
+            tabLayout.setBackgroundColor(cardColor);
+        }
 
         session = new SessionManager(this);
         viewingUser = session.getUsername();
 
-        Toolbar toolbar = findViewById(R.id.toolbar_wrapped);
         setSupportActionBar(toolbar);
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
