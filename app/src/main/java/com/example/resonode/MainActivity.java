@@ -96,6 +96,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private SwipeRefreshLayout swipeRefresh;
     private ImageView ivPlaylistHeader;
 
+    private ImageButton btnAddShared;
+
     private androidx.constraintlayout.widget.ConstraintLayout playerRoot;
     private TextView tvTitle, tvArtist, tvCurrentTime, tvTotalTime;
     private ImageButton btnPlay, btnNext, btnPrev, btnClosePlayer;
@@ -110,6 +112,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private String currentPath = "";
     private int currentSongIndex = -1;
     private int currentVersionCode = 0;
+    private boolean isSharedPreview = false;
+    private String sharedOwner = "";
+    private String sharedToken = "";
 
     private MusicService musicService;
     private boolean isBound = false;
@@ -402,6 +407,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         offlineDB = new OfflineDB(this);
 
+        checkAndRequestAppLinks();
+
         checkForUpdates();
         fetchMusicContent(Config.SERVER_URL, "");
         pendingIntentToHandle = getIntent();
@@ -429,7 +436,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         try { tempEncodedPath = URLEncoder.encode(folderPath, "UTF-8"); } catch (Exception e) { tempEncodedPath = folderPath; }
         final String encodedPath = tempEncodedPath;
 
-        final String currentTargetUrl = Config.SERVER_URL + "/browse?username=" + username + "&folder=" + encodedPath;
+        final String effectiveUsername = isSharedPreview ? sharedOwner : session.getUsername();
+        final String currentTargetUrl = Config.SERVER_URL + "/browse?username=" + effectiveUsername + "&folder=" + encodedPath;
         final String currentFolderRequest = folderPath;
 
         executor.execute(new Runnable() {
@@ -487,6 +495,15 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                 else if (finalIsVault) adapter.setMode(PlaylistAdapter.MODE_VAULT);
                                 else adapter.setMode(PlaylistAdapter.MODE_PRIVATE);
 
+                                if (isSharedPreview) {
+                                    adapter.setMode(PlaylistAdapter.MODE_SHARED);
+                                } else if (currentPath.equals("General") || currentPath.startsWith("General/")) {
+                                    adapter.setMode(PlaylistAdapter.MODE_PUBLIC);
+                                } else if (finalIsVault) {
+                                    adapter.setMode(PlaylistAdapter.MODE_VAULT);
+                                } else {
+                                    adapter.setMode(PlaylistAdapter.MODE_PRIVATE);
+                                }
                                 adapter.notifyDataSetChanged();
                                 if (isBound && musicService != null && musicService.getCurrentSong() != null) {
                                     adapter.setPlayingState(musicService.getCurrentSong().getPath(), musicService.isPlaying());
@@ -650,14 +667,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (!isBound || musicService == null) return;
         try {
             String urlToPlay;
-            String username = session.getUsername();
+            String effectiveUsername = isSharedPreview ? sharedOwner : session.getUsername();
             if (item.getPath().startsWith("/")) {
                 urlToPlay = item.getPath();
             } else {
                 String encodedPath = URLEncoder.encode(item.getPath(), "UTF-8");
-                urlToPlay = Config.SERVER_URL + "/stream?username=" + username + "&path=" + encodedPath;
+                urlToPlay = Config.SERVER_URL + "/stream?username=" + effectiveUsername + "&path=" + encodedPath;
             }
-            musicService.playUrl(urlToPlay, musicList, currentSongIndex, username);
+            musicService.playUrl(urlToPlay, musicList, currentSongIndex, effectiveUsername);
         } catch (Exception e) {
             Toast.makeText(this, "Error al reproduir", Toast.LENGTH_SHORT).show();
         }
@@ -702,7 +719,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 }
             }
             try {
-                urlToTry = Config.SERVER_URL + "/cover?username=" + session.getUsername() + "&path=" + URLEncoder.encode(currentPath, "UTF-8");
+                urlToTry = Config.SERVER_URL + "/cover?username=" + (isSharedPreview ? sharedOwner : session.getUsername()) + "&path=" + URLEncoder.encode(currentPath, "UTF-8");
             } catch (Exception e) {
             }
         } else if (song.getPath().startsWith("/")) {
@@ -710,7 +727,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 String originalPath = offlineDB.getServerPathForLocalFile(song.getPath());
                 if (originalPath != null) {
                     try {
-                        urlToTry = Config.SERVER_URL + "/cover?username=" + session.getUsername() + "&path=" + URLEncoder.encode(originalPath, "UTF-8");
+                        urlToTry = Config.SERVER_URL + "/cover?username=" + (isSharedPreview ? sharedOwner : session.getUsername()) + "&path=" + URLEncoder.encode(originalPath, "UTF-8");
                     } catch (Exception e) {}
                 }
 
@@ -731,7 +748,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         } else {
             try {
-                urlToTry = Config.SERVER_URL + "/cover?username=" + session.getUsername() + "&path=" + URLEncoder.encode(song.getPath(), "UTF-8");
+                urlToTry = Config.SERVER_URL + "/cover?username=" + (isSharedPreview ? sharedOwner : session.getUsername()) + "&path=" + URLEncoder.encode(song.getPath(), "UTF-8");
             } catch (Exception e) {}
         }
 
@@ -844,7 +861,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 btnSearch.setVisibility(View.GONE);
                 fabAdd.hide();
 
-                if (adapter.getMode() == PlaylistAdapter.MODE_PRIVATE) {
+                if (isSharedPreview) {
+                    btnBulkMore.setVisibility(View.GONE);
+                    tvToolbarAction.setVisibility(View.VISIBLE);
+                    tvToolbarAction.setText("AFEGIR (" + count + ")");
+                } else if (adapter.getMode() == PlaylistAdapter.MODE_PRIVATE) {
                     btnBulkMore.setVisibility(View.VISIBLE);
                     tvToolbarAction.setVisibility(View.VISIBLE);
                     tvToolbarAction.setText(count + " sel.");
@@ -856,8 +877,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             } else {
                 tvToolbarAction.setVisibility(View.GONE);
                 btnBulkMore.setVisibility(View.GONE);
-                btnSearch.setVisibility(currentPath.isEmpty() ? View.VISIBLE : View.GONE);
-                if (currentPath.isEmpty()) fabAdd.show();
+                btnSearch.setVisibility(currentPath.isEmpty() && !isSharedPreview ? View.VISIBLE : View.GONE);
+                if (currentPath.isEmpty() && !isSharedPreview) fabAdd.show();
             }
         });
 
@@ -897,12 +918,21 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         btnBulkMore.setOnClickListener(v -> {
             android.widget.PopupMenu popup = new android.widget.PopupMenu(MainActivity.this, v);
             popup.getMenu().add("Afegir a Playlist");
-            popup.getMenu().add("Eliminar");
+
+            if (!isSharedPreview) {
+                popup.getMenu().add("Eliminar");
+            }
+
             popup.setOnMenuItemClickListener(item -> {
                 String action = item.getTitle().toString();
                 List<MusicItem> selected = adapter.getSelectedItems();
+
                 if (action.equals("Afegir a Playlist")) {
-                    showAddToPlaylistDialog(selected);
+                    if (isSharedPreview) {
+                        showAddToPlaylistDialogForShared(selected);
+                    } else {
+                        showAddToPlaylistDialog(selected);
+                    }
                 } else if (action.equals("Eliminar")) {
                     bulkDeleteItems(selected);
                 }
@@ -977,13 +1007,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
 
         final androidx.core.app.NotificationCompat.Builder builder = new androidx.core.app.NotificationCompat.Builder(this, channelId)
-                .setSmallIcon(R.mipmap.ic_launcher) // Canviat per a que no falle
+                .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle("Descarregant " + playlistItem.getName())
                 .setContentText("Calculant cançons...")
                 .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
-                .setProgress(100, 0, false); // "false" activa la barra de percentatge real
+                .setProgress(100, 0, false);
 
         notificationManager.notify(notificationId, builder.build());
 
@@ -1004,7 +1034,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     JSONObject json = new JSONObject(responseList.body().string());
                     JSONArray items = json.getJSONArray("items");
 
-                    // 1. Comptem el total de cançons per a saber el 100% de la barra
                     int totalSongs = 0;
                     for (int i = 0; i < items.length(); i++) {
                         if (items.getJSONObject(i).getString("type").equals("file")) {
@@ -1041,7 +1070,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         String name = o.getString("name");
                         String artist = o.optString("artist", "Desconegut");
 
-                        // 2. Actualitzem la notificació ABANS de baixar la cançó
                         downloadedCount++;
                         int progressPercent = 0;
                         if (totalSongs > 0) progressPercent = (int) ((downloadedCount * 100L) / totalSongs);
@@ -1050,7 +1078,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                 .setContentText("[" + progressPercent + "%] " + name.replace(".mp3", ""));
                         notificationManager.notify(notificationId, builder.build());
 
-                        // Iniciem descàrrega
                         String encodedFilePath = URLEncoder.encode(serverPath, "UTF-8");
                         String streamUrl = Config.SERVER_URL + "/stream?username=" + username + "&path=" + encodedFilePath;
 
@@ -1069,7 +1096,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         resFile.close();
                     }
 
-                    // 3. Descàrrega acabada: ESBORREM LA NOTIFICACIÓ
                     notificationManager.cancel(notificationId);
 
                     final int count = downloadedCount;
@@ -1083,7 +1109,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 } catch (final Exception e) {
                     e.printStackTrace();
 
-                    // 4. Si hi ha error, també esborrem la notificació perquè no es quede penjada
                     notificationManager.cancel(notificationId);
 
                     mainHandler.post(new Runnable() {
@@ -1136,6 +1161,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         btnShuffle.setOnClickListener(v -> { if (isBound) { musicService.toggleShuffle(); updateShuffleUI(); } });
         btnRepeat.setOnClickListener(v -> { if (isBound) { musicService.toggleRepeatOne(); updateRepeatUI(); } });
+
+        if (btnAddShared != null) {
+            btnAddShared.setOnClickListener(v -> {
+                if (isBound && musicService != null && musicService.getCurrentSong() != null) {
+                    List<MusicItem> tempList = new ArrayList<>();
+                    tempList.add(musicService.getCurrentSong());
+                    showAddToPlaylistDialogForShared(tempList);
+                }
+            });
+        }
 
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar s, int p, boolean f) { if(f && isBound) musicService.seekTo(p); }
@@ -1323,15 +1358,29 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if(isPlayerExpanded) {
             closePlayer();
         }
-        else if(drawerLayout.isDrawerOpen(GravityCompat.START)) drawerLayout.closeDrawer(GravityCompat.START);
-        else if(!adapter.getSelectedItems().isEmpty()){ adapter.setSelectionMode(false); fabAdd.show(); }
+        else if(drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            drawerLayout.closeDrawer(GravityCompat.START);
+        }
+        else if(!adapter.getSelectedItems().isEmpty()) {
+            adapter.setSelectionMode(false);
+            if(!isSharedPreview) fabAdd.show();
+        }
+        else if(isSharedPreview) {
+            isSharedPreview = false;
+            sharedOwner = "";
+            sharedToken = "";
+            fetchMusicContent(Config.SERVER_URL, "");
+        }
         else if(!currentPath.isEmpty()) {
             File f=new File(currentPath);
             String p=f.getParent();
             if(p==null)p="";
             recyclerView.startAnimation(android.view.animation.AnimationUtils.loadAnimation(this, R.anim.slide_in_left));
             fetchMusicContent(Config.SERVER_URL, p.replace("\\","/"));
-        } else super.onBackPressed();
+        }
+        else {
+            super.onBackPressed();
+        }
     }
 
     @Override
@@ -1912,6 +1961,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             default: tintColor = 0xFFF2B327; break;
         }
 
+        if (btnAddShared != null) {
+            btnAddShared.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+        }
         if (btnPlay != null) btnPlay.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
         if (btnNext != null) btnNext.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
         if (btnPrev != null) btnPrev.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
@@ -1999,22 +2051,32 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private void handlePendingIntent() {
         if (pendingIntentToHandle != null && Intent.ACTION_VIEW.equals(pendingIntentToHandle.getAction())) {
-            Uri audioUri = pendingIntentToHandle.getData();
-            if (audioUri != null && isBound && musicService != null) {
+            Uri data = pendingIntentToHandle.getData();
+            if (data != null) {
 
-                String[] meta = getAudioMetadata(audioUri);
-                String title = meta[0];
-                String artist = meta[1];
+                if ( (("http".equals(data.getScheme()) || "https".equals(data.getScheme())) && "resonode.app".equals(data.getHost())) ||
+                        ("resonode".equals(data.getScheme()) && "share".equals(data.getHost())) ) {
 
-                MusicItem externalItem = new MusicItem(title, "file", audioUri.toString(), artist);
-                List<MusicItem> temp = new ArrayList<>();
-                temp.add(externalItem);
-                currentSongIndex = 0;
-                musicService.playUrl(audioUri.toString(), temp, 0, session.getUsername());
+                    final String token = data.getQueryParameter("token");
+                    if (token != null && !token.isEmpty()) {
+                        resolveSharedToken(token);
+                    }
+                }
+                else if (isBound && musicService != null) {
+                    String[] meta = getAudioMetadata(data);
+                    String title = meta[0];
+                    String artist = meta[1];
 
-                if (playerRoot != null && !isPlayerExpanded) {
-                    fullSet.applyTo(playerRoot);
-                    isPlayerExpanded = true;
+                    MusicItem externalItem = new MusicItem(title, "file", data.toString(), artist);
+                    List<MusicItem> temp = new ArrayList<>();
+                    temp.add(externalItem);
+                    currentSongIndex = 0;
+                    musicService.playUrl(data.toString(), temp, 0, session.getUsername());
+
+                    if (playerRoot != null && !isPlayerExpanded) {
+                        fullSet.applyTo(playerRoot);
+                        isPlayerExpanded = true;
+                    }
                 }
             }
             pendingIntentToHandle = null;
@@ -2101,6 +2163,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             tvArtist.setTextSize(15);
             tvCurrentTime.setTextSize(14);
             tvTotalTime.setTextSize(14);
+
+            if (btnAddShared != null) {
+                btnAddShared.setVisibility(isSharedPreview ? View.VISIBLE : View.GONE);
+            }
+
         } else {
             miniSet.constrainWidth(R.id.btn_play, (int) (50 * density));
             miniSet.constrainHeight(R.id.btn_play, (int) (50 * density));
@@ -2118,6 +2185,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             tvArtist.setTextSize(11);
             tvCurrentTime.setTextSize(11);
             tvTotalTime.setTextSize(11);
+
+            if (btnAddShared != null) {
+                btnAddShared.setVisibility(View.GONE);
+            }
         }
         playerRoot.requestLayout();
     }
@@ -2228,14 +2299,17 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         String resStr = response.body().string();
                         JSONObject resJson = new JSONObject(resStr);
                         final String token = resJson.getString("token");
-                        final String shareLink = "resonode://share?token=" + token;
+                        final String shareLink = "http://resonode.app/share?token=" + token;
 
                         mainHandler.post(new Runnable() {
                             @Override
                             public void run() {
                                 Intent sendIntent = new Intent();
                                 sendIntent.setAction(Intent.ACTION_SEND);
-                                sendIntent.putExtra(Intent.EXTRA_TEXT, "Escolta açò a ResoNode!\n" + shareLink);
+
+                                String missatge = "Escolta la playlist \"" + playlist.getName() + "\" a ResoNode!\n\n" + shareLink;
+
+                                sendIntent.putExtra(Intent.EXTRA_TEXT, missatge);
                                 sendIntent.setType("text/plain");
                                 startActivity(Intent.createChooser(sendIntent, "Compartir amb..."));
                             }
@@ -2248,5 +2322,161 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 }
             }
         });
+    }
+
+    private void resolveSharedToken(final String token) {
+        ProgressDialog pd = new ProgressDialog(this);
+        pd.setMessage("Obrint previsualització...");
+        pd.show();
+        executor.execute(() -> {
+            try {
+                Request req = new Request.Builder().url(Config.SERVER_URL + "/share/resolve?token=" + token).build();
+                Response res = client.newCall(req).execute();
+                if (res.isSuccessful()) {
+                    JSONObject json = new JSONObject(res.body().string());
+                    String type = json.getString("type");
+                    final String owner = json.getString("owner");
+                    final String path = json.getString("path");
+                    final String name = json.getString("name");
+                    final String artist = json.optString("artist", "Desconegut");
+
+                    mainHandler.post(() -> {
+                        pd.dismiss();
+                        isSharedPreview = true;
+                        sharedOwner = owner;
+                        sharedToken = token;
+
+                        if (type.equals("file")) {
+                            MusicItem item = new MusicItem(name, "file", path, artist);
+                            musicList.clear();
+                            musicList.add(item);
+                            currentPath = name;
+
+                            adapter.setCurrentPath(currentPath);
+                            adapter.setMode(PlaylistAdapter.MODE_SHARED);
+                            updateTitleAndFab("Shared", false);
+
+                            currentSongIndex = 0;
+                            playServiceStream(item);
+                            if (!isPlayerExpanded) {
+                                isPlayerExpanded = true;
+                                applyPlayerState(true, true);
+                            }
+                        } else {
+                            fetchMusicContent(Config.SERVER_URL, path);
+                        }
+                    });
+                } else {
+                    mainHandler.post(() -> { pd.dismiss(); Toast.makeText(MainActivity.this, "Enllaç invàlid o caducat", Toast.LENGTH_SHORT).show(); });
+                }
+            } catch (Exception e) {
+                mainHandler.post(() -> { pd.dismiss(); Toast.makeText(MainActivity.this, "Error de xarxa", Toast.LENGTH_SHORT).show(); });
+            }
+        });
+    }
+
+    private void showAddToPlaylistDialogForShared(final List<MusicItem> l) {
+        executor.execute(() -> {
+            try {
+                Response r=client.newCall(new Request.Builder().url(Config.SERVER_URL+"/browse?username="+session.getUsername()+"&folder=").build()).execute();
+                if(r.isSuccessful()){
+                    JSONArray a=new JSONObject(r.body().string()).getJSONArray("items");
+                    final List<String> n=new ArrayList<>();
+                    n.add("Nova...");
+                    for(int x=0;x<a.length();x++) if(a.getJSONObject(x).getString("type").equals("folder")) n.add(a.getJSONObject(x).getString("name"));
+                    mainHandler.post(() -> {
+                        new AlertDialog.Builder(MainActivity.this).setItems(n.toArray(new String[0]), (d, w) -> {
+                            if(w==0) showCreatePlaylistForSharedAddDialog(l);
+                            else addSharedSongsToPlaylist(n.get(w), l);
+                        }).show();
+                    });
+                }
+            }catch(Exception e){}
+        });
+    }
+
+    private void showCreatePlaylistForSharedAddDialog(final List<MusicItem> s) {
+        EditText i = new EditText(this);
+        new AlertDialog.Builder(this)
+                .setTitle("Nom de la playlist")
+                .setView(i)
+                .setPositiveButton("OK", (d, w) -> {
+                    JSONObject j=new JSONObject();
+                    try{ j.put("username",session.getUsername()); j.put("playlist_name",i.getText().toString()); }catch(Exception e){}
+                    postJson("/playlist/create", j.toString(), () -> addSharedSongsToPlaylist(i.getText().toString(), s));
+                }).show();
+    }
+
+    private void addSharedSongsToPlaylist(String playlistName, List<MusicItem> s) {
+        JSONObject j=new JSONObject();
+        JSONArray a=new JSONArray();
+        for(MusicItem m:s) { a.put(new File(m.getPath()).getName()); }
+        try{
+            j.put("token", sharedToken);
+            j.put("target_username", session.getUsername());
+            j.put("target_playlist", playlistName);
+            j.put("items", a);
+        }catch(Exception e){}
+        postJson("/share/import_items", j.toString(), () -> {
+            mainHandler.post(() -> {
+                adapter.setSelectionMode(false);
+                Toast.makeText(MainActivity.this, "Cançó/ons importades a " + playlistName, Toast.LENGTH_SHORT).show();
+            });
+        });
+    }
+
+    private void checkAndRequestAppLinks() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            try {
+                android.content.SharedPreferences prefs = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE);
+                boolean ignoreAppLinks = prefs.getBoolean("ignore_app_links", false);
+                if (ignoreAppLinks) return;
+
+                android.content.pm.verify.domain.DomainVerificationManager manager =
+                        getSystemService(android.content.pm.verify.domain.DomainVerificationManager.class);
+
+                if (manager != null) {
+                    android.content.pm.verify.domain.DomainVerificationUserState userState =
+                            manager.getDomainVerificationUserState(getPackageName());
+
+                    boolean isVerified = false;
+                    java.util.Map<String, Integer> hostMap = userState.getHostToStateMap();
+
+                    String domain = "resonode.app";
+
+                    if (hostMap.containsKey(domain)) {
+                        int state = hostMap.get(domain);
+
+                        isVerified = (state == android.content.pm.verify.domain.DomainVerificationUserState.DOMAIN_STATE_VERIFIED ||
+                                state == android.content.pm.verify.domain.DomainVerificationUserState.DOMAIN_STATE_SELECTED);
+                    }
+
+                    if (!isVerified) {
+                        new AlertDialog.Builder(this)
+                                .setTitle("Activar Enllaços Directes")
+                                .setMessage("Per a que els enllaços de Telegram o WhatsApp òbriguen directament la playlist en ResoNode, necessites donar permís a l'aplicació.\n\nA la següent pantalla, prem 'Afig un enllaç' i marca '" + domain + "'.")
+                                .setCancelable(false)
+                                .setPositiveButton("CONFIGURAR ARA", new DialogInterface.OnClickListener() {
+                                    @Override
+                                    public void onClick(DialogInterface dialog, int which) {
+                                        Intent intent = new Intent(android.provider.Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS);
+                                        intent.setData(Uri.parse("package:" + getPackageName()));
+                                        startActivity(intent);
+                                    }
+                                })
+                                .setNegativeButton("IGNORAR PER SEMPRE", new DialogInterface.OnClickListener() {
+                                    @Override
+                                    public void onClick(DialogInterface dialog, int which) {
+                                        prefs.edit().putBoolean("ignore_app_links", true).apply();
+                                    }
+                                })
+                                .setNeutralButton("MÉS TARD", null)
+                                .show();
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
     }
 }

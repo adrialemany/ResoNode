@@ -25,6 +25,7 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
     public static final int MODE_PRIVATE = 0;
     public static final int MODE_PUBLIC = 1;
     public static final int MODE_VAULT = 2;
+    public static final int MODE_SHARED = 3;
     public static final int MODE_SEARCH = MODE_VAULT;
 
     private String playingSongPath = "";
@@ -209,8 +210,12 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
             holder.checkBox.setVisibility(View.GONE);
             holder.itemView.setBackgroundColor(0x00000000);
 
-            holder.btnMore.setVisibility(View.VISIBLE);
-            holder.btnMore.setOnClickListener(v -> showPopupMenu(v, item));
+            if (mode == MODE_SHARED) {
+                holder.btnMore.setVisibility(View.GONE);
+            } else {
+                holder.btnMore.setVisibility(View.VISIBLE);
+                holder.btnMore.setOnClickListener(v -> showPopupMenu(v, item));
+            }
 
             holder.itemView.setOnClickListener(v -> listener.onItemClick(item));
 
