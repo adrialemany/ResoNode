@@ -29,6 +29,10 @@ Unlike other media servers like Plex or Jellyfin, ResoNode is built with a speci
 
 ## System Architecture
 
+<p align="center">
+<img src="./assets/architechture.png" width="220" alt="System Architecture">
+</p>
+
 The project is structured into three main directories:
 
 1.  **`/server` (Python/FastAPI):** Runs on the host machine. Manages the file system, user authentication, URL updating, and streaming logic.
@@ -36,11 +40,6 @@ The project is structured into three main directories:
 3.  **`/app` (Android Client):** A native application optimized for low-latency streaming and offline synchronization.
 
 ### The Connection Logic
-
-<p align="center">
-<img src="./assets/wrapped.png" width="220" alt="Wrapped Statistics">
-<img src="./assets/wrapped_ranking.png" width="220" alt="Wrapped Ranking">
-</p>
 
 To bypass carrier-grade NAT (CGNAT) and dynamic IPs without user intervention:
 
