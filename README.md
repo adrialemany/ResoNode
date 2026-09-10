@@ -30,7 +30,7 @@ Unlike other media servers like Plex or Jellyfin, ResoNode is built with a speci
 ## System Architecture
 
 <p align="center">
-<img src="./assets/architechture.png" width="220" alt="System Architecture">
+<img src="./assets/architecture.png" width="220" alt="System Architecture">
 </p>
 
 The project is structured into three main directories:
