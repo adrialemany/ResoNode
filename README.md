@@ -37,7 +37,10 @@ The project is structured into three main directories:
 
 ### The Connection Logic
 
-*(Note: The old `architecture.png` showing Gmail routing is now deprecated).*
+<p align="center">
+<img src="./assets/wrapped.png" width="220" alt="Wrapped Statistics">
+<img src="./assets/wrapped_ranking.png" width="220" alt="Wrapped Ranking">
+</p>
 
 To bypass carrier-grade NAT (CGNAT) and dynamic IPs without user intervention:
 
