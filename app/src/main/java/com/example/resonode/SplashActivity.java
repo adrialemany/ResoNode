@@ -1,60 +1,72 @@
 package com.example.resonode;
 
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.view.animation.AlphaAnimation;
+import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
-import android.view.View;
-import android.view.animation.AlphaAnimation;
-
 public class SplashActivity extends AppCompatActivity {
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_splash);
 
-        
         View logoContainer = findViewById(R.id.logo_container);
-        View statusText = findViewById(R.id.tv_status);
+        final TextView statusText = findViewById(R.id.tv_status);
 
-        
         AlphaAnimation fadeIn = new AlphaAnimation(0.0f, 1.0f);
         fadeIn.setDuration(1000);
         logoContainer.startAnimation(fadeIn);
 
-        
-        UrlFetcher.fetchLatestUrl(new UrlFetcher.UrlCallback() {
-            @Override
-            public void onUrlFound(String url) {
-                
-                runOnUiThread(() -> ((android.widget.TextView)statusText).setText("Sincronitzant..."));
+        final SessionManager session = new SessionManager(this);
 
-                Config.SERVER_URL = url;
-                navigateToNextScreen();
-            }
+        if (!NetworkReceiver.isConnected(this)) {
+            if (statusText != null) statusText.setText(getString(R.string.status_starting_offline));
+            new android.os.Handler().postDelayed(() -> navigateToNextScreen(session), 800);
+            return;
+        }
 
-            @Override
-            public void onError(Exception e) {
-                runOnUiThread(() -> ((android.widget.TextView)statusText).setText("Iniciant offline..."));
-                navigateToNextScreen();
-            }
-        });
+        if (session.hasInvitationCode()) {
+            UrlFetcher.fetchLatestUrl(session.getInvitationCode(), new UrlFetcher.UrlCallback() {
+                @Override
+                public void onUrlFound(String url) {
+                    runOnUiThread(() -> {
+                        if (statusText != null) statusText.setText(getString(R.string.status_syncing));
+                    });
+                    Config.SERVER_URL = url;
+                    navigateToNextScreen(session);
+                }
+
+                @Override
+                public void onError(Exception e) {
+                    runOnUiThread(() -> {
+                        if (statusText != null) statusText.setText(getString(R.string.status_starting_offline));
+                    });
+                    navigateToNextScreen(session);
+                }
+            });
+        } else {
+            new android.os.Handler().postDelayed(() -> navigateToNextScreen(session), 1500);
+        }
     }
 
-    private void navigateToNextScreen() {
-        
+    private void navigateToNextScreen(SessionManager session) {
         runOnUiThread(() -> {
-            SessionManager session = new SessionManager(SplashActivity.this);
             Intent intent;
-
-            if (session.isLoggedIn()) {
-                
+            if (session.isLoggedIn() && session.hasInvitationCode()) {
                 intent = new Intent(SplashActivity.this, MainActivity.class);
             } else {
-                
                 intent = new Intent(SplashActivity.this, LoginActivity.class);
             }
 
@@ -65,7 +77,7 @@ public class SplashActivity extends AppCompatActivity {
 
             startActivity(intent);
             overridePendingTransition(R.anim.fade_in_activity, R.anim.fade_out_activity);
-            finish(); 
+            finish();
         });
     }
 }

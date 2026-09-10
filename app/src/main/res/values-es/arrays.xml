@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="play_nav_style_display">
+        <item>HUD (Por defecto)</item>
+        <item>Hexágono</item>
+        <item>Glitch</item>
+        <item>Original</item>
+    </string-array>
+    <string-array name="icon_color_display">
+        <item>Oro ResoNode</item>
+        <item>Amarillo Night City</item>
+        <item>Rojo Arasaka</item>
+        <item>Blanco</item>
+        <item>Verde Matrix</item>
+        <item>Cian Neón</item>
+    </string-array>
+</resources>

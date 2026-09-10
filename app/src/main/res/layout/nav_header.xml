@@ -35,7 +35,7 @@
             android:id="@+id/tv_header_user"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Usuari"
+            android:text="@string/label_user_placeholder"
             android:textColor="#FFFFFF"
             android:textSize="18sp"
             android:textStyle="bold"
@@ -44,7 +44,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="ResoNode Music"
+            android:text="@string/artist_resonode_music"
             android:textColor="#F2B327"
             android:textSize="12sp"
             android:letterSpacing="0.1" />

@@ -1,9 +1,259 @@
 <resources>
     <string name="app_name">ResoNode</string>
 
-    <string name="navigation_drawer_open">Abrir menú lateral</string>
-    <string name="navigation_drawer_close">Cerrar menú lateral</string>
+    <string name="navigation_drawer_open">Open side menu</string>
+    <string name="navigation_drawer_close">Close side menu</string>
 
-    <string name="menu_settings">Configuració</string>
+    <string name="menu_settings">Settings</string>
 
+    <string name="label_language">Language</string>
+    <string name="toast_profile_pic_updated">Profile picture updated!</string>
+
+    <!-- Login -->
+    <string name="error_missing_username">Username required</string>
+    <string name="error_missing_password">Password required</string>
+    <string name="error_missing_invitation_code">Invitation code required</string>
+    <string name="error_invalid_invitation_code">Invalid invitation code or network error</string>
+    <string name="error_wrong_password">Incorrect password</string>
+    <string name="error_security_invalid_key">Security error (invalid secret key)</string>
+    <string name="error_server_code">Server error: %1$d</string>
+    <string name="error_connection">Connection error: %1$s</string>
+    <string name="toast_account_created">Account created!</string>
+    <string name="error_register_failed">Registration failed: %1$s</string>
+    <string name="error_register_generic">Registration error: %1$s</string>
+    <string name="btn_connecting">Connecting…</string>
+    <string name="btn_login_register">LOG IN / REGISTER</string>
+
+    <!-- MainActivity -->
+    <string name="msg_create_playlist_first">Create a playlist first to add songs!</string>
+    <string name="title_add_songs_count">Where do you want to add %1$d songs?</string>
+    <string name="toast_songs_added_count">%1$d songs added to %2$s</string>
+    <string name="error_loading_playlists">Error loading playlists</string>
+
+    <string name="status_server_restarted_searching">Server restarted. Searching for new address…</string>
+    <string name="status_server_error_offline">Server Error (Offline?)</string>
+    <string name="status_no_connection">No Connection</string>
+    <string name="error_visual">Display error: %1$s</string>
+    <string name="toast_server_found_reconnecting">Server found! Reconnecting…</string>
+    <string name="status_server_unavailable">Server unavailable</string>
+
+    <string name="title_offline_mode">Offline Mode</string>
+    <string name="title_local_playlist">%1$s (Local)</string>
+    <string name="status_offline_mode">Offline Mode</string>
+
+    <string name="title_public">PUBLIC</string>
+    <string name="error_play_failed">Playback error</string>
+    <string name="artist_playlist_default">Playlist</string>
+    <string name="artist_resonode_music">ResoNode Music</string>
+
+    <string name="menu_create_playlist">Create Playlist</string>
+    <string name="menu_add_from_public_playlist">Add from Public Playlist</string>
+    <string name="menu_search_vault">Search in Vault</string>
+    <string name="menu_add_local_song">Add Local Song</string>
+
+    <string name="action_delete">Delete</string>
+    <string name="action_rename">Rename</string>
+    <string name="action_add_to_playlist">Add to Playlist</string>
+    <string name="action_download_offline">Download Offline</string>
+    <string name="action_delete_offline">Delete Offline</string>
+    <string name="action_change_cover">Change Cover</string>
+    <string name="action_share">Share</string>
+    <string name="chooser_select_cover">Select a cover</string>
+
+    <string name="toolbar_add_count">ADD (%1$d)</string>
+    <string name="toolbar_selected_count">%1$d sel.</string>
+
+    <string name="title_delete_songs_count">Delete %1$d songs?</string>
+    <string name="msg_delete_songs_confirm">This action will remove the selected songs from the playlist.</string>
+    <string name="btn_yes">YES</string>
+    <string name="btn_no">NO</string>
+    <string name="toast_local_songs_removed">Local songs removed</string>
+
+    <string name="toast_playlist_already_downloaded">This playlist is already downloaded</string>
+    <string name="toast_starting_download">Starting download…</string>
+    <string name="channel_downloads_name">Music Downloads</string>
+    <string name="notif_downloading_title">Downloading %1$s</string>
+    <string name="notif_calculating_songs">Calculating songs…</string>
+    <string name="notif_download_progress">[%1$d%%] %2$s</string>
+    <string name="toast_downloaded_count">Downloaded %1$d songs</string>
+    <string name="toast_generic_error">Error: %1$s</string>
+    <string name="error_reading_playlist">Error reading playlist</string>
+
+    <string name="progress_uploading_cover">Uploading cover…</string>
+    <string name="toast_cover_updated">Cover Updated!</string>
+    <string name="toast_upload_failed">Upload failed: %1$s</string>
+
+    <string name="error_server_generic">Server error</string>
+
+    <string name="title_new">New</string>
+    <string name="btn_ok">OK</string>
+    <string name="title_delete">Delete</string>
+    <string name="toast_local_song_removed">Local song removed</string>
+    <string name="title_rename">Rename</string>
+
+    <string name="item_new_ellipsis">New…</string>
+    <string name="title_new_playlist_name">New playlist name</string>
+    <string name="toast_added_to_playlist">Added to %1$s</string>
+    <string name="title_name">Name</string>
+    <string name="title_playlist_name">Playlist name</string>
+
+    <string name="changelog_default">General improvements.</string>
+    <string name="title_whats_new">What\'s new v%1$d!</string>
+    <string name="btn_great">GREAT</string>
+
+    <string name="toast_downloading_update_background">Downloading update in the background…</string>
+    <string name="channel_updates_name">Updates</string>
+    <string name="notif_downloading_app">Downloading ResoNode</string>
+    <string name="notif_calculating_size">Calculating size…</string>
+    <string name="progress_percent">%1$d%%</string>
+    <string name="notif_download_complete_title">Download complete</string>
+    <string name="notif_ready_to_install">Ready to install</string>
+    <string name="notif_download_error_title">Download error</string>
+    <string name="notif_download_error_text">Could not download the update</string>
+    <string name="toast_update_error">Error updating</string>
+
+    <string name="title_new_version_available">New version available! v%1$d</string>
+    <string name="msg_update_required">This update needs to be installed.</string>
+    <string name="btn_update">UPDATE</string>
+    <string name="btn_close">CLOSE</string>
+
+    <string name="title_delete_downloads">Delete downloads</string>
+    <string name="msg_delete_downloads_confirm">Delete the downloaded files for \'%1$s\'? (The playlist will remain on the server)</string>
+    <string name="btn_delete">DELETE</string>
+    <string name="btn_cancel">CANCEL</string>
+    <string name="toast_downloads_deleted">Downloads deleted</string>
+
+    <string name="toast_connection_restored">Connection restored</string>
+
+    <string name="title_critical_update">Critical Update</string>
+    <string name="msg_old_app_detected">An old version (SpotiFly) has been detected. It must be uninstalled to continue. (You will need to download your downloaded songs again in this version)</string>
+    <string name="btn_uninstall_now">UNINSTALL NOW</string>
+    <string name="toast_press_uninstall_button">Press the \'Uninstall\' button on the screen that opened.</string>
+    <string name="toast_uninstaller_error">Error: Could not open the uninstaller.</string>
+
+    <string name="title_enable_direct_links">Enable Direct Links</string>
+    <string name="msg_enable_direct_links">So that Telegram or WhatsApp links open directly in ResoNode, the app needs permission.\n\nOn the next screen, tap \'Add a link\' and check \'%1$s\'.</string>
+    <string name="btn_configure_now">CONFIGURE NOW</string>
+    <string name="btn_ignore_forever">IGNORE FOREVER</string>
+    <string name="btn_later">LATER</string>
+
+    <string name="toast_connecting_anime_server">Connecting to Anime server…</string>
+    <string name="toast_url_copied_jellyfin">URL copied! Paste it into the Jellyfin server.</string>
+    <string name="toast_install_jellyfin_first">Install Jellyfin first</string>
+    <string name="toast_anime_url_not_found">Anime URL not found</string>
+    <string name="error_connection_generic">Connection error</string>
+
+    <string name="toast_generating_link">Generating link…</string>
+    <string name="share_message_template">Listen to the playlist \"%1$s\" on ResoNode!\n\n%2$s</string>
+    <string name="chooser_share_with">Share with…</string>
+    <string name="toast_server_error_share">Server error</string>
+
+    <string name="progress_opening_preview">Opening preview…</string>
+    <string name="unknown_artist">Unknown</string>
+    <string name="toast_invalid_expired_link">Invalid or expired link</string>
+    <string name="error_network">Network error</string>
+
+    <string name="toast_songs_imported_to">Song(s) imported to %1$s</string>
+
+    <string name="unknown_file">Unknown File</string>
+    <string name="local_device">Local Device</string>
+
+    <!-- Login screen -->
+    <string name="title_login">ResoNode Login</string>
+    <string name="hint_username">Username</string>
+    <string name="hint_password">Password</string>
+    <string name="hint_invitation_code">Invitation Code (First time only)</string>
+
+    <!-- Splash screen -->
+    <string name="tagline_music_unlimited">Music Unlimited</string>
+    <string name="status_connecting_server">Connecting to server…</string>
+
+    <!-- Settings screen -->
+    <string name="section_your_profile">YOUR PROFILE</string>
+    <string name="btn_change_photo">CHANGE PHOTO</string>
+    <string name="section_resonode_wrapped">RESONODE WRAPPED</string>
+    <string name="switch_enable_stats">Enable statistics collection</string>
+    <string name="option_private">Private (Only for you)</string>
+    <string name="option_public">Public (Visible to other users)</string>
+    <string name="section_player_customization">PLAYER CUSTOMIZATION</string>
+    <string name="label_play_pause_style">Play / Pause button style</string>
+    <string name="label_prev_next_style">Previous / Next button style</string>
+    <string name="label_player_icon_color">Player icon color</string>
+    <string name="switch_pure_black_mode">Pure Black Mode (AMOLED)</string>
+    <string name="section_this_device">THIS DEVICE</string>
+    <string name="label_loading">Loading…</string>
+    <string name="section_other_linked_devices">OTHER LINKED DEVICES</string>
+    <string name="section_storage_audio">STORAGE AND AUDIO</string>
+    <string name="label_downloaded_music">Downloaded Music</string>
+    <string name="label_calculating">Calculating…</string>
+    <string name="btn_clear">CLEAR</string>
+    <string name="btn_open_system_equalizer">Open System Equalizer</string>
+    <string name="section_source_code">SOURCE CODE</string>
+    <string name="label_open_source_description">This project is Open Source. You can check the code on GitHub.</string>
+    <string name="url_github" translatable="false">https://github.com/adrialemany/ResoNode</string>
+    <string name="section_privacy_data">PRIVACY AND DATA</string>
+    <string name="desc_privacy_data">This application makes no commercial use of your data. Privacy is the main reason ResoNode exists. No data is collected beyond the device model (for developer security) and music statistics if you enable the \'Wrapped\' option above (minutes listened and play count). If disabled, nothing is saved.</string>
+    <string name="label_version_placeholder">ResoNode v…</string>
+
+    <!-- Search screen -->
+    <string name="hint_search_artists_songs">Search artists, songs…</string>
+    <string name="label_artists_in_vault">Artists in the Vault</string>
+
+    <!-- Wrapped screen -->
+    <string name="label_time_listened">TIME LISTENED</string>
+    <string name="label_minutes_placeholder">0 min</string>
+    <string name="label_top_5_songs">TOP 5 SONGS</string>
+    <string name="label_no_data_period">Not enough data for this period.</string>
+
+    <!-- Nav header -->
+    <string name="label_user_placeholder">User</string>
+
+    <!-- List items -->
+    <string name="label_playlist_name_placeholder">Playlist Name</string>
+
+    <!-- Main toolbar -->
+    <string name="label_app_name_caps" translatable="false">RESONODE</string>
+    <string name="label_toolbar_action_placeholder">ADD</string>
+
+    <!-- Splash screen -->
+    <string name="status_starting_offline">Starting offline…</string>
+    <string name="status_syncing">Syncing…</string>
+
+    <!-- PlaylistAdapter -->
+    <string name="label_public_playlists_display">Public Playlists</string>
+    <string name="label_type_artist">Artist</string>
+    <string name="label_type_album">Album</string>
+    <string name="label_type_playlist">Playlist</string>
+    <string name="label_type_song">Song</string>
+
+    <!-- WrappedActivity -->
+    <string name="label_week">Week</string>
+    <string name="label_month">Month</string>
+    <string name="label_year">Year</string>
+    <string name="title_my_wrapped">My Wrapped</string>
+    <string name="title_wrapped_of">%1$s\'s Wrapped</string>
+    <string name="menu_community">Community</string>
+    <string name="toast_enable_wrapped_first">Enable Wrapped in Settings first.</string>
+    <string name="label_my_profile_emoji">👤 My profile</string>
+    <string name="title_community_ranking">Community Ranking (%1$s)</string>
+    <string name="msg_offline_cant_view_others">No connection. Other users\' data cannot be viewed.</string>
+    <string name="label_private_status">Private</string>
+    <string name="msg_user_profile_private">This user has a private profile.</string>
+    <string name="toast_offline_showing_local_data">Offline Mode: Showing local data</string>
+    <string name="label_plays_count">%1$d plays</string>
+    <string name="label_minutes_short">%1$d min</string>
+    <string name="label_hours_short">%1$.1f h</string>
+
+    <string name="label_app_version">ResoNode v%1$s</string>
+    <string name="toast_no_equalizer_found">No equalizer found</string>
+    <string name="label_no_other_devices">No other linked devices</string>
+    <string name="title_delete_offline_music">Delete offline music</string>
+    <string name="msg_delete_offline_music_confirm">Are you sure you want to delete all downloaded music from this device?</string>
+    <string name="btn_delete_offline_music">Delete</string>
+    <string name="toast_offline_music_deleted">Downloaded music deleted</string>
+
+    <string name="menu_home">Home</string>
+    <string name="menu_account">Account</string>
+    <string name="menu_anime">Anime Server</string>
+    <string name="menu_logout">Log Out</string>
 </resources>

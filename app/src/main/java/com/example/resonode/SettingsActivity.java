@@ -49,6 +49,11 @@ import okhttp3.Response;
 
 public class SettingsActivity extends AppCompatActivity {
 
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase));
+    }
+
     private TextView tvDeviceInfo;
     private TextView tvOtherLabel;
     private LinearLayout llDevicesList;
@@ -67,6 +72,8 @@ public class SettingsActivity extends AppCompatActivity {
 
     private ImageView ivProfile;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    private String currentLanguageKey;
 
     private final ActivityResultLauncher<Intent> pickProfileLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
@@ -88,7 +95,7 @@ public class SettingsActivity extends AppCompatActivity {
                                 .apply();
 
                         loadProfileImage(imageUri.toString());
-                        Toast.makeText(this, "Foto de perfil actualitzada!", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, getString(R.string.toast_profile_pic_updated), Toast.LENGTH_SHORT).show();
                     }
                 }
             }
@@ -103,7 +110,6 @@ public class SettingsActivity extends AppCompatActivity {
         boolean isPureBlack = prefs.getBoolean("pure_black", false);
         LinearLayout settingsRoot = findViewById(R.id.settings_root);
 
-        // Agafem la barra i la targeta de perfil
         Toolbar toolbar = findViewById(R.id.toolbar_settings);
         com.google.android.material.card.MaterialCardView cardProfile = findViewById(R.id.card_profile);
 
@@ -115,14 +121,14 @@ public class SettingsActivity extends AppCompatActivity {
         } else {
             getWindow().getDecorView().setBackgroundColor(0xFF121212);
             if (settingsRoot != null) settingsRoot.setBackgroundColor(0xFF121212);
-            if (toolbar != null) toolbar.setBackgroundColor(0xFF191414); // Gris fosc per a la Toolbar
-            if (cardProfile != null) cardProfile.setCardBackgroundColor(0xFF1A1A1A); // Gris fosc per a la Card
+            if (toolbar != null) toolbar.setBackgroundColor(0xFF191414);
+            if (cardProfile != null) cardProfile.setCardBackgroundColor(0xFF1A1A1A);
         }
 
         setSupportActionBar(toolbar);
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-            getSupportActionBar().setTitle("Configuració");
+            getSupportActionBar().setTitle(getString(R.string.menu_settings));
         }
 
         session = new SessionManager(this);
@@ -150,6 +156,7 @@ public class SettingsActivity extends AppCompatActivity {
         tvVersion = findViewById(R.id.tv_version);
 
         setupSpinners();
+        setupLanguageSpinner();
 
         String currentModel = session.getDeviceModel();
         tvDeviceInfo.setText(currentModel);
@@ -172,9 +179,9 @@ public class SettingsActivity extends AppCompatActivity {
 
         try {
             PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
-            tvVersion.setText("ResoNode v" + pInfo.versionName);
+            tvVersion.setText(getString(R.string.label_app_version, pInfo.versionName));
         } catch (Exception e) {
-            tvVersion.setText("ResoNode v1.0");
+            tvVersion.setText(getString(R.string.label_app_version, "1.0"));
         }
     }
 
@@ -202,9 +209,9 @@ public class SettingsActivity extends AppCompatActivity {
         Spinner spinNav = findViewById(R.id.spinner_nav_style);
         Spinner spinColor = findViewById(R.id.spinner_icon_color);
 
-        final String[] stylesDisplay = {"Visor Tàctic Kiroshi (HUD)", "Maquinària Industrial (Hex)", "Dades Corruptes (Glitch)", "Clàssic (Material)"};
+        final String[] stylesDisplay = getResources().getStringArray(R.array.play_nav_style_display);
         final String[] stylesKeys = {"hud", "hex", "glitch", "original"};
-        final String[] colorsDisplay = {"ResoNode (Groc Daurat)", "Groc Night City", "Roig Arasaka", "Blanc (Clàssic)", "Verd (SpotiFly)", "Cian (Elèctric)"};
+        final String[] colorsDisplay = getResources().getStringArray(R.array.icon_color_display);
         final String[] colorsKeys = {"resonode", "cyber_yellow", "cyber_red", "white", "green", "cyan"};
 
         ArrayAdapter<String> adapterStyles = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, stylesDisplay);
@@ -246,6 +253,60 @@ public class SettingsActivity extends AppCompatActivity {
         spinColor.setOnItemSelectedListener(spinnerListener);
     }
 
+    /**
+     * Configura el selector d'idioma. Requereix un Spinner amb id "spinner_language"
+     * al layout activity_settings.xml (vegeu nota adjunta).
+     * Els noms dels idiomes es mostren en el seu propi idioma (endònims) i no es tradueixen.
+     */
+    private void setupLanguageSpinner() {
+        Spinner spinLanguage = findViewById(R.id.spinner_language);
+        if (spinLanguage == null) return;
+
+        final String[] languagesDisplay = {"English", "Català", "Español"};
+        final String[] languagesKeys = {
+                LocaleHelper.LANG_ENGLISH,
+                LocaleHelper.LANG_CATALAN,
+                LocaleHelper.LANG_SPANISH
+        };
+
+        ArrayAdapter<String> adapterLanguages = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, languagesDisplay);
+        adapterLanguages.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinLanguage.setAdapter(adapterLanguages);
+
+        currentLanguageKey = LocaleHelper.getLanguage(this);
+        for (int i = 0; i < languagesKeys.length; i++) {
+            if (languagesKeys[i].equals(currentLanguageKey)) spinLanguage.setSelection(i);
+        }
+
+        spinLanguage.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (view != null && view instanceof TextView) ((TextView) view).setTextColor(0xFFFFFFFF);
+
+                String selectedLanguage = languagesKeys[position];
+                if (!selectedLanguage.equals(currentLanguageKey)) {
+                    currentLanguageKey = selectedLanguage;
+                    restartAppWithNewLanguage(selectedLanguage);
+                }
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) {}
+        });
+    }
+
+    /**
+     * Aplica el nou idioma i reinicia tota la pila d'activitats des de MainActivity,
+     * perquè totes (incloent-hi la que hi havia darrere en el back stack) es
+     * tornen a crear amb la nova configuració d'idioma.
+     */
+    private void restartAppWithNewLanguage(String languageKey) {
+        LocaleHelper.setLocale(this, languageKey);
+
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
+    }
+
     private void openEqualizer() {
         try {
             Intent intent = new Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL);
@@ -253,7 +314,7 @@ public class SettingsActivity extends AppCompatActivity {
             intent.putExtra(AudioEffect.EXTRA_AUDIO_SESSION, 0);
             startActivityForResult(intent, 101);
         } catch (Exception e) {
-            Toast.makeText(this, "No s'ha trobat equalitzador al sistema.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_no_equalizer_found), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -323,7 +384,7 @@ public class SettingsActivity extends AppCompatActivity {
                 tvOtherLabel.setVisibility(View.VISIBLE);
             } else {
                 TextView noDevices = new TextView(this);
-                noDevices.setText("Cap altre dispositiu vinculat.");
+                noDevices.setText(getString(R.string.label_no_other_devices));
                 noDevices.setTextColor(0xFF888888);
                 noDevices.setPadding(0, 16, 0, 0);
                 llDevicesList.addView(noDevices);
@@ -367,10 +428,10 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void showClearConfirmation() {
         new AlertDialog.Builder(this)
-                .setTitle("Eliminar música offline?")
-                .setMessage("S'esborraran totes les cançons descarregades.")
-                .setPositiveButton("ELIMINAR", (dialog, which) -> deleteOfflineMusic())
-                .setNegativeButton("CANCEL·LAR", null)
+                .setTitle(getString(R.string.title_delete_offline_music))
+                .setMessage(getString(R.string.msg_delete_offline_music_confirm))
+                .setPositiveButton(getString(R.string.btn_delete_offline_music), (dialog, which) -> deleteOfflineMusic())
+                .setNegativeButton(getString(R.string.btn_cancel), null)
                 .show();
     }
 
@@ -389,7 +450,7 @@ public class SettingsActivity extends AppCompatActivity {
             db.close();
 
             runOnUiThread(() -> {
-                Toast.makeText(this, "Música eliminada.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(R.string.toast_offline_music_deleted), Toast.LENGTH_SHORT).show();
                 calculateStorageUsage();
             });
         });

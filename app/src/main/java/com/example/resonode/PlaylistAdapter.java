@@ -116,13 +116,13 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
         final MusicItem item = items.get(position);
 
         String rawName = item.getName();
-        if (rawName.equals("General")) rawName = "Playlists Públiques";
+        if (rawName.equals("General")) rawName = context.getString(R.string.label_public_playlists_display);
         String displayName = item.isFolder() ? rawName : rawName.replace(".mp3", "").replace(".MP3", "").replaceAll("^(\\d+[\\s_\\-]*)+", "");
         holder.tvName.setText(displayName);
 
         String infoText = "";
-        if (item.isFolder()) infoText = (mode == MODE_VAULT) ? (currentPath.isEmpty() ? "Artista" : "Àlbum") : "Playlist";
-        else infoText = (item.getArtist() != null && !item.getArtist().isEmpty() && !item.getArtist().equals("ResoNode")) ? item.getArtist() : "Cançó";
+        if (item.isFolder()) infoText = (mode == MODE_VAULT) ? (currentPath.isEmpty() ? context.getString(R.string.label_type_artist) : context.getString(R.string.label_type_album)) : context.getString(R.string.label_type_playlist);
+        else infoText = (item.getArtist() != null && !item.getArtist().isEmpty() && !item.getArtist().equals("ResoNode")) ? item.getArtist() : context.getString(R.string.label_type_song);
         holder.tvArtist.setText(infoText);
 
         File backupCover = null;
@@ -263,9 +263,9 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
         PopupMenu popup = new PopupMenu(context, view);
 
         if (mode == MODE_VAULT || mode == MODE_PRIVATE || mode == MODE_SEARCH || mode == MODE_PUBLIC) {
-            popup.getMenu().add("Afegir a Playlist");
+            popup.getMenu().add(context.getString(R.string.action_add_to_playlist));
         }
-        popup.getMenu().add("Compartir");
+        popup.getMenu().add(context.getString(R.string.action_share));
 
         if (item.isFolder()) {
             boolean isDownloaded = false;
@@ -273,16 +273,16 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
                 if (offlineDB != null) isDownloaded = offlineDB.isPlaylistDownloaded(item.getName());
             } catch (Exception e) {}
 
-            if (isDownloaded) popup.getMenu().add("Borrar Offline");
-            else popup.getMenu().add("Descarregar Offline");
+            if (isDownloaded) popup.getMenu().add(context.getString(R.string.action_delete_offline));
+            else popup.getMenu().add(context.getString(R.string.action_download_offline));
         }
 
         if (mode == MODE_PRIVATE) {
             if (currentPath.isEmpty() || item.isFolder()) {
-                popup.getMenu().add("Canviar Portada");
-                popup.getMenu().add("Reanomenar");
+                popup.getMenu().add(context.getString(R.string.action_change_cover));
+                popup.getMenu().add(context.getString(R.string.action_rename));
             }
-            popup.getMenu().add("Eliminar");
+            popup.getMenu().add(context.getString(R.string.action_delete));
         }
 
         popup.setOnMenuItemClickListener(menuItem -> {

@@ -14,7 +14,7 @@
         android:layout_height="wrap_content"
         android:textSize="18sp"
         android:textStyle="bold"
-        android:text="Nom de la Playlist"
+        android:text="@string/label_playlist_name_placeholder"
         android:textColor="@android:color/white" />
 
 </LinearLayout>

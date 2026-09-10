@@ -3,11 +3,11 @@
     <group android:checkableBehavior="single">
         <item
             android:id="@+id/nav_home"
-            android:title="Inici"
+            android:title="@string/menu_home"
             android:icon="@android:drawable/ic_menu_rotate" />
     </group>
 
-    <item android:title="Compte">
+    <item android:title="@string/menu_account">
         <menu>
             <item
                 android:id="@+id/nav_wrapped"
@@ -20,10 +20,10 @@
             <item
                 android:id="@+id/nav_anime"
                 android:icon="@android:drawable/ic_menu_slideshow"
-                android:title="Servidor d'Anime" />
+                android:title="@string/menu_anime" />
             <item
                 android:id="@+id/nav_logout"
-                android:title="Tancar Sessió"
+                android:title="@string/menu_logout"
                 android:icon="@android:drawable/ic_lock_power_off" />
         </menu>
     </item>

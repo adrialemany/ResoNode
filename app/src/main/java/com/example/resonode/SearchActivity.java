@@ -1,5 +1,6 @@
 package com.example.resonode;
 
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
@@ -33,6 +34,11 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class SearchActivity extends AppCompatActivity {
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase));
+    }
 
     private static final String SERVER_URL = Config.SERVER_URL;
     private static final String API_SECRET_KEY = Config.API_SECRET_KEY;
@@ -91,7 +97,7 @@ public class SearchActivity extends AppCompatActivity {
         adapter = new PlaylistAdapter(this, searchResults, PlaylistAdapter.MODE_SEARCH,
                 item -> openContext(item),
                 (item, action) -> {
-                    if (action.equals("Añadir a Playlist")) {
+                    if (action.equals(getString(R.string.action_add_to_playlist))) {
                         Intent resultIntent = new Intent();
                         resultIntent.putExtra("action", "add_to_playlist");
                         resultIntent.putExtra("path_id", item.getPath());
@@ -155,7 +161,7 @@ public class SearchActivity extends AppCompatActivity {
                         if(type.equals("song")) displayName += " - " + artist;
                         if(type.equals("album")) displayName += " (" + artist + ")";
 
-                        
+
                         boolean isFolder = type.equals("album") || type.equals("artist");
 
                         temp.add(new MusicItem(displayName, isFolder ? "folder" : "file", path));
@@ -226,7 +232,7 @@ public class SearchActivity extends AppCompatActivity {
                                             artista,
                                             "folder",
                                             itemPath,
-                                            "Artista"
+                                            getString(R.string.label_type_artist)
                                     );
                                     searchResults.add(item);
                                 } catch (Exception e) {

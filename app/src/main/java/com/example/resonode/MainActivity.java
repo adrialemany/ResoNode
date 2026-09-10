@@ -1,5 +1,5 @@
 package com.example.resonode;
-
+import androidx.annotation.Nullable;
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.ComponentName;
@@ -82,6 +82,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     static {
         AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
     }
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase));
+    }
 
     private DrawerLayout drawerLayout;
     private ImageButton btnShuffle, btnRepeat;
@@ -104,6 +108,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private ImageView ivCover;
     private SeekBar seekBar;
     private boolean isPlayerExpanded = false;
+    private Boolean lastKnownConnectionState = null;
     private androidx.constraintlayout.widget.ConstraintSet miniSet = new androidx.constraintlayout.widget.ConstraintSet();
     private androidx.constraintlayout.widget.ConstraintSet fullSet = new androidx.constraintlayout.widget.ConstraintSet();
     private SessionManager session;
@@ -133,8 +138,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private OkHttpClient createClient() {
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
+                .connectTimeout(2, TimeUnit.SECONDS)
+                .readTimeout(2, TimeUnit.SECONDS)
                 .addInterceptor(new Interceptor() {
                     @Override
                     public Response intercept(Chain chain) throws IOException {
@@ -210,12 +215,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
                     mainHandler.post(() -> {
                         if (pList.isEmpty()) {
-                            Toast.makeText(MainActivity.this, "Crea primer una playlist per afegir cançons!", Toast.LENGTH_LONG).show();
+                            Toast.makeText(MainActivity.this, getString(R.string.msg_create_playlist_first), Toast.LENGTH_LONG).show();
                             return;
                         }
 
                         new AlertDialog.Builder(MainActivity.this)
-                                .setTitle("On vols afegir " + audioUris.size() + " cançons?")
+                                .setTitle(getString(R.string.title_add_songs_count, audioUris.size()))
                                 .setItems(pList.toArray(new String[0]), (d, w) -> {
                                     String selectedPlaylist = pList.get(w);
 
@@ -227,7 +232,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                         offlineDB.saveSong(uri.toString(), title, selectedPlaylist, uri.toString(), artist);
                                     }
 
-                                    Toast.makeText(MainActivity.this, audioUris.size() + " cançons afegides a " + selectedPlaylist, Toast.LENGTH_SHORT).show();
+                                    Toast.makeText(MainActivity.this, getString(R.string.toast_songs_added_count, audioUris.size(), selectedPlaylist), Toast.LENGTH_SHORT).show();
 
                                     if (currentPath.equals(selectedPlaylist)) {
                                         fetchMusicContent(Config.SERVER_URL, currentPath);
@@ -236,7 +241,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     });
                 }
             } catch(Exception e) {
-                mainHandler.post(() -> Toast.makeText(MainActivity.this, "Error carregant les playlists", Toast.LENGTH_SHORT).show());
+                mainHandler.post(() -> Toast.makeText(MainActivity.this, getString(R.string.error_loading_playlists), Toast.LENGTH_SHORT).show());
             }
         });
     }
@@ -376,6 +381,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             return;
         }
 
+        lastKnownConnectionState = NetworkReceiver.isConnected(this);
         session = new SessionManager(this);
         checkAndUninstallOldApp("com.example.spotifly");
         if (!session.isLoggedIn()) { logoutUser(); return; }
@@ -420,12 +426,17 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void fetchMusicContent(final String baseUrl, final String folderPath) {
+        if (!NetworkReceiver.isConnected(this)) {
+            loadOfflineContent(folderPath);
+            return;
+        }
+
         mainHandler.post(new Runnable() {
             @Override public void run() {
                 if (swipeRefresh != null) swipeRefresh.setRefreshing(true);
                 tvStatus.setVisibility(View.GONE);
                 if (isRetryingConnection) {
-                    tvStatus.setText("Servidor reiniciat. Cercant nova adreça...");
+                    tvStatus.setText(getString(R.string.status_server_restarted_searching));
                     tvStatus.setVisibility(View.VISIBLE);
                 }
             }
@@ -489,7 +500,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                 musicList.addAll(temp);
                                 updateTitleAndFab(currentPath, finalIsVault);
                                 if (adapter != null) adapter.setCurrentPath(currentPath);
-                                    updateHeaderImage();
+                                updateHeaderImage();
 
                                 if (currentPath.equals("General") || currentPath.startsWith("General/")) adapter.setMode(PlaylistAdapter.MODE_PUBLIC);
                                 else if (finalIsVault) adapter.setMode(PlaylistAdapter.MODE_VAULT);
@@ -510,7 +521,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                 }
                                 mainHandler.postDelayed(() -> tvStatus.setVisibility(View.GONE), 3000);
                             } catch (Throwable t) {
-                                tvStatus.setText("Error visual: " + t.getMessage());
+                                tvStatus.setText(getString(R.string.error_visual, t.getMessage()));
                                 tvStatus.setVisibility(View.VISIBLE);
                             }
                         }
@@ -535,7 +546,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
                             loadOfflineContent(currentFolderRequest);
 
-                            String msg = NetworkReceiver.isConnected(MainActivity.this) ? "Error Servidor (Offline?)" : "Sense Connexió";
+                            String msg = NetworkReceiver.isConnected(MainActivity.this) ? getString(R.string.status_server_error_offline) : getString(R.string.status_no_connection);
                             tvStatus.setText(msg);
                             tvStatus.setVisibility(View.VISIBLE);
                             if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
@@ -554,30 +565,51 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             cardHeader.setVisibility(View.GONE);
         } else {
             cardHeader.setVisibility(View.VISIBLE);
+            ivPlaylistHeader.setVisibility(View.VISIBLE);
             String headerUrl = "";
             try {
                 String encodedHeaderPath = URLEncoder.encode(currentPath, "UTF-8");
                 headerUrl = Config.SERVER_URL + "/cover?username=" + session.getUsername() + "&path=" + encodedHeaderPath;
             } catch (Exception e) {}
 
+            android.util.Log.d("COVER_DEBUG", "Intentant carregar caràtula des de: " + headerUrl);
+
             Glide.with(this)
                     .load(headerUrl)
+                    .listener(new com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable>() {
+                        @Override
+                        public boolean onLoadFailed(@Nullable com.bumptech.glide.load.engine.GlideException e, Object model, com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target, boolean isFirstResource) {
+                            String errorMsg = e != null ? e.getMessage() : "Desconegut";
+                            if (e != null && e.getRootCauses() != null) {
+                                for (Throwable t : e.getRootCauses()) {
+                                    errorMsg += " | Causa: " + t.getMessage();
+                                }
+                            }
+                            android.util.Log.e("COVER_DEBUG", "❌ ERROR carregant caràtula: " + errorMsg);
+                            return false;
+                        }
+
+                        @Override
+                        public boolean onResourceReady(android.graphics.drawable.Drawable resource, Object model, com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target, com.bumptech.glide.load.DataSource dataSource, boolean isFirstResource) {
+                            android.util.Log.d("COVER_DEBUG", "✨ Caràtula carregada correctament!");
+                            return false;
+                        }
+                    })
                     .placeholder(R.mipmap.ic_launcher)
                     .error(R.mipmap.ic_launcher)
                     .centerCrop()
                     .into(ivPlaylistHeader);
         }
     }
-
     private void attemptServerRediscovery(final String pendingFolderPath) {
-        UrlFetcher.fetchLatestUrl(new UrlFetcher.UrlCallback() {
+        UrlFetcher.fetchLatestUrl(session.getInvitationCode(), new UrlFetcher.UrlCallback() {
             @Override
             public void onUrlFound(final String newUrl) {
                 runOnUiThread(() -> {
                     Config.SERVER_URL = newUrl;
                     getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
                             .edit().putString("last_server_url", newUrl).apply();
-                    Toast.makeText(MainActivity.this, "Servidor trobat! Reconnectant...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, getString(R.string.toast_server_found_reconnecting), Toast.LENGTH_SHORT).show();
                     fetchMusicContent(Config.SERVER_URL, pendingFolderPath);
                 });
             }
@@ -591,7 +623,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private void handleDiscoveryFailure(String folderPath) {
         isRetryingConnection = false;
         loadOfflineContent(folderPath);
-        tvStatus.setText("Servidor no disponible");
+        tvStatus.setText(getString(R.string.status_server_unavailable));
         tvStatus.setVisibility(View.VISIBLE);
         if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
     }
@@ -604,11 +636,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (folderPath.isEmpty()) {
             offlineItems.addAll(offlineDB.getOfflinePlaylists());
             currentPath = "";
-            displayTitle = "Mode Offline";
+            displayTitle = getString(R.string.title_offline_mode);
         } else {
             offlineItems.addAll(offlineDB.getSongsInPlaylist(folderPath));
             currentPath = folderPath;
-            displayTitle = folderPath + " (Local)";
+            displayTitle = getString(R.string.title_local_playlist, folderPath);
         }
 
         mainHandler.post(new Runnable() {
@@ -620,7 +652,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
                 if (getSupportActionBar() != null) getSupportActionBar().setTitle(displayTitle);
                 fabAdd.hide();
-                tvStatus.setText("Mode Sense Connexió");
+                tvStatus.setText(getString(R.string.status_offline_mode));
                 tvStatus.setVisibility(View.VISIBLE);
 
                 if (adapter != null) adapter.setCurrentPath(currentPath);
@@ -637,8 +669,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         TextView tvTitle = findViewById(R.id.tv_custom_title);
         if (tvTitle == null) return;
 
-        String title = path.isEmpty() ? "RESONODE" : path;
-        if (title.startsWith("General")) title = "PÚBLICA";
+        String title = path.isEmpty() ? getString(R.string.app_name).toUpperCase() : path;
+        if (title.startsWith("General")) title = getString(R.string.title_public);
 
         tvTitle.setText(title.toUpperCase());
         if (btnSearch != null) {
@@ -676,7 +708,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
             musicService.playUrl(urlToPlay, musicList, currentSongIndex, effectiveUsername);
         } catch (Exception e) {
-            Toast.makeText(this, "Error al reproduir", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.error_play_failed), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -689,8 +721,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         String artistName = song.getArtist();
         if (artistName == null || artistName.isEmpty()) {
-            if (song.isFolder()) artistName = "Playlist";
-            else artistName = "ResoNode Music";
+            if (song.isFolder()) artistName = getString(R.string.artist_playlist_default);
+            else artistName = getString(R.string.artist_resonode_music);
         }
 
         tvTitle.setText(cleanTitle);
@@ -825,8 +857,44 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         swipeRefresh.setColorSchemeColors(0xFF1DB954);
         swipeRefresh.setOnRefreshListener(() -> {
-            isRetryingConnection = false;
-            fetchMusicContent(Config.SERVER_URL, currentPath);
+            try { Glide.get(MainActivity.this).clearMemory(); } catch (Exception e) {}
+
+            if (tvStatus.getVisibility() == View.VISIBLE || Config.SERVER_URL == null || Config.SERVER_URL.isEmpty()) {
+
+                if (!NetworkReceiver.isConnected(MainActivity.this)) {
+                    Toast.makeText(MainActivity.this, "Revisa la connexió a Internet", Toast.LENGTH_SHORT).show();
+                    swipeRefresh.setRefreshing(false);
+                    return;
+                }
+
+                if (session.hasInvitationCode()) {
+                    tvStatus.setText("Sincronitzant servidor...");
+                    UrlFetcher.fetchLatestUrl(session.getInvitationCode(), new UrlFetcher.UrlCallback() {
+                        @Override
+                        public void onUrlFound(String url) {
+                            Config.SERVER_URL = url;
+                            runOnUiThread(() -> {
+                                tvStatus.setVisibility(View.GONE);
+                                fetchMusicContent(Config.SERVER_URL, currentPath);
+                                swipeRefresh.setRefreshing(false);
+                            });
+                        }
+
+                        @Override
+                        public void onError(Exception e) {
+                            runOnUiThread(() -> {
+                                tvStatus.setText("Mode Sense Connexió");
+                                swipeRefresh.setRefreshing(false);
+                            });
+                        }
+                    });
+                } else {
+                    swipeRefresh.setRefreshing(false);
+                }
+            } else {
+                isRetryingConnection = false;
+                fetchMusicContent(Config.SERVER_URL, currentPath);
+            }
         });
 
         adapter = new PlaylistAdapter(this, musicList, PlaylistAdapter.MODE_PRIVATE,
@@ -841,18 +909,18 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     }
                 },
                 (item, action) -> {
-                    if (action.equals("Eliminar")) deleteItem(item);
-                    else if (action.equals("Reanomenar")) showRenameDialog(item);
-                    else if (action.equals("Afegir a Playlist")) showPlaylistSelectorForVaultItem(item);
-                    else if (action.equals("Descarregar Offline")) downloadPlaylist(item);
-                    else if (action.equals("Borrar Offline")) deleteOfflinePlaylist(item);
-                    else if (action.equals("Canviar Portada")) {
+                    if (action.equals(getString(R.string.action_delete))) deleteItem(item);
+                    else if (action.equals(getString(R.string.action_rename))) showRenameDialog(item);
+                    else if (action.equals(getString(R.string.action_add_to_playlist))) showPlaylistSelectorForVaultItem(item);
+                    else if (action.equals(getString(R.string.action_download_offline))) downloadPlaylist(item);
+                    else if (action.equals(getString(R.string.action_delete_offline))) deleteOfflinePlaylist(item);
+                    else if (action.equals(getString(R.string.action_change_cover))) {
                         playlistCoverTarget = item;
                         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                         intent.setType("image/*");
-                        pickImageLauncher.launch(Intent.createChooser(intent, "Selecciona una portada"));
+                        pickImageLauncher.launch(Intent.createChooser(intent, getString(R.string.chooser_select_cover)));
                     }
-                    else if (action.equals("Compartir")) sharePlaylist(item);
+                    else if (action.equals(getString(R.string.action_share))) sharePlaylist(item);
                 }
         );
 
@@ -864,15 +932,15 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 if (isSharedPreview) {
                     btnBulkMore.setVisibility(View.GONE);
                     tvToolbarAction.setVisibility(View.VISIBLE);
-                    tvToolbarAction.setText("AFEGIR (" + count + ")");
+                    tvToolbarAction.setText(getString(R.string.toolbar_add_count, count));
                 } else if (adapter.getMode() == PlaylistAdapter.MODE_PRIVATE) {
                     btnBulkMore.setVisibility(View.VISIBLE);
                     tvToolbarAction.setVisibility(View.VISIBLE);
-                    tvToolbarAction.setText(count + " sel.");
+                    tvToolbarAction.setText(getString(R.string.toolbar_selected_count, count));
                 } else {
                     btnBulkMore.setVisibility(View.GONE);
                     tvToolbarAction.setVisibility(View.VISIBLE);
-                    tvToolbarAction.setText("AFEGIR (" + count + ")");
+                    tvToolbarAction.setText(getString(R.string.toolbar_add_count, count));
                 }
             } else {
                 tvToolbarAction.setVisibility(View.GONE);
@@ -917,23 +985,23 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         btnBulkMore.setOnClickListener(v -> {
             android.widget.PopupMenu popup = new android.widget.PopupMenu(MainActivity.this, v);
-            popup.getMenu().add("Afegir a Playlist");
+            popup.getMenu().add(getString(R.string.action_add_to_playlist));
 
             if (!isSharedPreview) {
-                popup.getMenu().add("Eliminar");
+                popup.getMenu().add(getString(R.string.action_delete));
             }
 
             popup.setOnMenuItemClickListener(item -> {
                 String action = item.getTitle().toString();
                 List<MusicItem> selected = adapter.getSelectedItems();
 
-                if (action.equals("Afegir a Playlist")) {
+                if (action.equals(getString(R.string.action_add_to_playlist))) {
                     if (isSharedPreview) {
                         showAddToPlaylistDialogForShared(selected);
                     } else {
                         showAddToPlaylistDialog(selected);
                     }
-                } else if (action.equals("Eliminar")) {
+                } else if (action.equals(getString(R.string.action_delete))) {
                     bulkDeleteItems(selected);
                 }
                 return true;
@@ -944,9 +1012,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private void bulkDeleteItems(List<MusicItem> items) {
         new AlertDialog.Builder(this)
-                .setTitle("Borrar " + items.size() + " cançons?")
-                .setMessage("Aquesta acció eliminarà les cançons seleccionades de la playlist.")
-                .setPositiveButton("SI", (dialog, which) -> {
+                .setTitle(getString(R.string.title_delete_songs_count, items.size()))
+                .setMessage(getString(R.string.msg_delete_songs_confirm))
+                .setPositiveButton(getString(R.string.btn_yes), (dialog, which) -> {
 
                     if (offlineDB == null) offlineDB = new OfflineDB(MainActivity.this);
                     boolean hasLocals = false;
@@ -958,7 +1026,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     }
 
                     if (hasLocals) {
-                        Toast.makeText(MainActivity.this, "Cançons locals eliminades", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, getString(R.string.toast_local_songs_removed), Toast.LENGTH_SHORT).show();
                     }
 
                     executor.execute(() -> {
@@ -984,17 +1052,17 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         });
                     });
                 })
-                .setNegativeButton("NO", null)
+                .setNegativeButton(getString(R.string.btn_no), null)
                 .show();
     }
 
     private void downloadPlaylist(final MusicItem playlistItem) {
         if (offlineDB.isPlaylistDownloaded(playlistItem.getName())) {
-            Toast.makeText(this, "Esta playlist ja està descarregada", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_playlist_already_downloaded), Toast.LENGTH_SHORT).show();
             return;
         }
 
-        Toast.makeText(this, "Iniciant descàrrega...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, getString(R.string.toast_starting_download), Toast.LENGTH_SHORT).show();
 
         final android.app.NotificationManager notificationManager = (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         final String channelId = "DownloadChannel";
@@ -1002,14 +1070,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             android.app.NotificationChannel channel = new android.app.NotificationChannel(
-                    channelId, "Descàrregues de Música", android.app.NotificationManager.IMPORTANCE_LOW);
+                    channelId, getString(R.string.channel_downloads_name), android.app.NotificationManager.IMPORTANCE_LOW);
             notificationManager.createNotificationChannel(channel);
         }
 
         final androidx.core.app.NotificationCompat.Builder builder = new androidx.core.app.NotificationCompat.Builder(this, channelId)
                 .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle("Descarregant " + playlistItem.getName())
-                .setContentText("Calculant cançons...")
+                .setContentTitle(getString(R.string.notif_downloading_title, playlistItem.getName()))
+                .setContentText(getString(R.string.notif_calculating_songs))
                 .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
@@ -1029,7 +1097,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     Request requestList = new Request.Builder().url(urlList).build();
                     Response responseList = client.newCall(requestList).execute();
 
-                    if (!responseList.isSuccessful()) throw new Exception("Error al llegir playlist");
+                    if (!responseList.isSuccessful()) throw new Exception(getString(R.string.error_reading_playlist));
 
                     JSONObject json = new JSONObject(responseList.body().string());
                     JSONArray items = json.getJSONArray("items");
@@ -1068,14 +1136,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
                         String serverPath = o.getString("path");
                         String name = o.getString("name");
-                        String artist = o.optString("artist", "Desconegut");
+                        String artist = o.optString("artist", getString(R.string.unknown_artist));
 
                         downloadedCount++;
                         int progressPercent = 0;
                         if (totalSongs > 0) progressPercent = (int) ((downloadedCount * 100L) / totalSongs);
 
                         builder.setProgress(totalSongs, downloadedCount, false)
-                                .setContentText("[" + progressPercent + "%] " + name.replace(".mp3", ""));
+                                .setContentText(getString(R.string.notif_download_progress, progressPercent, name.replace(".mp3", "")));
                         notificationManager.notify(notificationId, builder.build());
 
                         String encodedFilePath = URLEncoder.encode(serverPath, "UTF-8");
@@ -1101,7 +1169,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     final int count = downloadedCount;
                     mainHandler.post(new Runnable() {
                         @Override public void run() {
-                            Toast.makeText(MainActivity.this, "Descarregades " + count + " cançons", Toast.LENGTH_LONG).show();
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_downloaded_count, count), Toast.LENGTH_LONG).show();
                             if (adapter != null) adapter.notifyDataSetChanged();
                         }
                     });
@@ -1112,7 +1180,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     notificationManager.cancel(notificationId);
 
                     mainHandler.post(new Runnable() {
-                        @Override public void run() { Toast.makeText(MainActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show(); }
+                        @Override public void run() { Toast.makeText(MainActivity.this, getString(R.string.toast_generic_error, e.getMessage()), Toast.LENGTH_SHORT).show(); }
                     });
                 }
             }
@@ -1214,7 +1282,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private void uploadCoverImage(Uri imageUri, final MusicItem playlist) {
         ProgressDialog pd = new ProgressDialog(this);
-        pd.setMessage("Pujant portada...");
+        pd.setMessage(getString(R.string.progress_uploading_cover));
         pd.setCancelable(false);
         pd.show();
 
@@ -1274,13 +1342,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                             @Override
                             public void run() {
                                 finalPd.dismiss();
-                                Toast.makeText(MainActivity.this, "Portada Actualizada!", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(MainActivity.this, getString(R.string.toast_cover_updated), Toast.LENGTH_SHORT).show();
 
                                 fetchMusicContent(Config.SERVER_URL, currentPath);
                             }
                         });
                     } else {
-                        throw new Exception("Error servidor: " + response.code());
+                        throw new Exception(getString(R.string.error_server_code, response.code()));
                     }
                 } catch (final Exception e) {
                     e.printStackTrace();
@@ -1288,7 +1356,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         @Override
                         public void run() {
                             finalPd.dismiss();
-                            Toast.makeText(MainActivity.this, "Fallo al subir: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_upload_failed, e.getMessage()), Toast.LENGTH_LONG).show();
                         }
                     });
                 }
@@ -1297,7 +1365,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void handleFabClick() {
-        String[] opts = {"Crear Playlist", "Afegir de Playlist Pública", "Buscar en Bòveda", "Afegir Cançó Local"};
+        String[] opts = {getString(R.string.menu_create_playlist), getString(R.string.menu_add_from_public_playlist), getString(R.string.menu_search_vault), getString(R.string.menu_add_local_song)};
         new AlertDialog.Builder(this).setItems(opts, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface d, int w) {
@@ -1331,7 +1399,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     if(client.newCall(request).execute().isSuccessful()) {
                         if(onSuccess != null) onSuccess.run();
                     }
-                } catch (Exception e) { showErrorOnUI("Error servidor"); }
+                } catch (Exception e) { showErrorOnUI(getString(R.string.error_server_generic)); }
             }
         });
     }
@@ -1416,23 +1484,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 Glide.with(this).load(Uri.parse(profileUri)).placeholder(R.mipmap.ic_launcher).centerCrop().into(ivProfile);
             }
         }
+
         applyPureBlackTheme();
         updatePlayerIcons();
 
         if (networkReceiver == null) {
             networkReceiver = new NetworkReceiver(this::handleNetworkChange);
-            registerReceiver(networkReceiver, new android.content.IntentFilter(android.net.ConnectivityManager.CONNECTIVITY_ACTION));
-        }
-
-        updatePlayerIcons();
-
-        if (networkReceiver == null) {
-            networkReceiver = new NetworkReceiver(new NetworkReceiver.ConnectivityListener() {
-                @Override
-                public void onNetworkChanged(boolean isConnected) {
-                    handleNetworkChange(isConnected);
-                }
-            });
             registerReceiver(networkReceiver, new android.content.IntentFilter(android.net.ConnectivityManager.CONNECTIVITY_ACTION));
         }
     }
@@ -1454,9 +1511,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private void showCreatePlaylistDialog() {
         EditText i=new EditText(this);
         new AlertDialog.Builder(this)
-                .setTitle("Nova")
+                .setTitle(getString(R.string.title_new))
                 .setView(i)
-                .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                .setPositiveButton(getString(R.string.btn_ok), new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface d, int w) {
                         JSONObject j=new JSONObject();
                         try{
@@ -1476,14 +1533,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private void deleteItem(final MusicItem i) {
         new AlertDialog.Builder(this)
-                .setTitle("Borrar")
-                .setPositiveButton("SI", new DialogInterface.OnClickListener() {
+                .setTitle(getString(R.string.title_delete))
+                .setPositiveButton(getString(R.string.btn_yes), new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface d, int w) {
 
                         if (i.getPath().startsWith("content://")) {
                             if (offlineDB == null) offlineDB = new OfflineDB(MainActivity.this);
                             offlineDB.removeLocalSong(i.getPath(), currentPath);
-                            Toast.makeText(MainActivity.this, "Cançó local eliminada", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_local_song_removed), Toast.LENGTH_SHORT).show();
                             fetchMusicContent(Config.SERVER_URL, currentPath);
                         } else {
                             JSONObject j=new JSONObject();
@@ -1506,9 +1563,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private void showRenameDialog(final MusicItem i) {
         EditText t=new EditText(this); t.setText(i.getName());
         new AlertDialog.Builder(this)
-                .setTitle("Renombrar")
+                .setTitle(getString(R.string.title_rename))
                 .setView(t)
-                .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                .setPositiveButton(getString(R.string.btn_ok), new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface d, int w) {
                         JSONObject j=new JSONObject();
                         try{
@@ -1536,7 +1593,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         JSONArray a=new JSONObject(r.body().string()).getJSONArray("items");
                         final List<String> l=new ArrayList<>();
 
-                        l.add("Nova...");
+                        l.add(getString(R.string.item_new_ellipsis));
 
                         for(int x=0;x<a.length();x++) if(a.getJSONObject(x).getString("type").equals("folder")) l.add(a.getJSONObject(x).getString("name"));
                         mainHandler.post(new Runnable() {
@@ -1561,9 +1618,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private void showCreatePlaylistForVaultItemDialog(final MusicItem item) {
         EditText i = new EditText(this);
         new AlertDialog.Builder(this)
-                .setTitle("Nom de la nova playlist")
+                .setTitle(getString(R.string.title_new_playlist_name))
                 .setView(i)
-                .setPositiveButton("OK", (d, w) -> createPlaylistAndAddVaultItem(i.getText().toString(), item))
+                .setPositiveButton(getString(R.string.btn_ok), (d, w) -> createPlaylistAndAddVaultItem(i.getText().toString(), item))
                 .show();
     }
 
@@ -1595,7 +1652,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 @Override public void run() {
                     mainHandler.post(new Runnable() {
                         @Override public void run() {
-                            Toast.makeText(MainActivity.this, "Afegit a " + playlistName, Toast.LENGTH_SHORT).show();
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_added_to_playlist, playlistName), Toast.LENGTH_SHORT).show();
 
                         }
                     });
@@ -1612,7 +1669,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     if(r.isSuccessful()){
                         JSONArray a=new JSONObject(r.body().string()).getJSONArray("items");
                         final List<String> n=new ArrayList<>();
-                        n.add("Nova...");
+                        n.add(getString(R.string.item_new_ellipsis));
                         for(int x=0;x<a.length();x++) if(a.getJSONObject(x).getString("type").equals("folder")) n.add(a.getJSONObject(x).getString("name"));
                         mainHandler.post(new Runnable() {
                             @Override public void run() {
@@ -1633,9 +1690,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private void showCreatePlaylistForAddDialog(final List<MusicItem> s) {
         EditText i=new EditText(this);
         new AlertDialog.Builder(this)
-                .setTitle("Nombre")
+                .setTitle(getString(R.string.title_name))
                 .setView(i)
-                .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                .setPositiveButton(getString(R.string.btn_ok), new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface d, int w) { createPlaylistAndAdd(i.getText().toString(),s); }
                 }).show();
     }
@@ -1683,7 +1740,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     if (response.isSuccessful()) {
                         JSONObject json = new JSONObject(response.body().string());
                         final int serverVersion = json.getInt("version");
-                        final String serverChangelog = json.optString("changelog", "Millores generals.");
+                        final String serverChangelog = json.optString("changelog", getString(R.string.changelog_default));
                         if (serverVersion > currentVersionCode) {
                             mainHandler.post(new Runnable() { @Override public void run() { showUpdateDialog(serverVersion); } });
                         } else if (serverVersion == currentVersionCode) {
@@ -1701,10 +1758,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (version > lastSeenLogVersion) {
             final int ver = version;
             new AlertDialog.Builder(this)
-                    .setTitle("Novetats v" + version + "!")
+                    .setTitle(getString(R.string.title_whats_new, version))
                     .setMessage(logText)
                     .setCancelable(false)
-                    .setPositiveButton("GENIAL", new DialogInterface.OnClickListener() {
+                    .setPositiveButton(getString(R.string.btn_great), new DialogInterface.OnClickListener() {
                         @Override public void onClick(DialogInterface dialog, int which) {
                             getSharedPreferences("ResoNodePrefs", MODE_PRIVATE).edit().putInt("last_changelog_seen", ver).apply();
                             dialog.dismiss();
@@ -1714,20 +1771,20 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void downloadAndInstallUpdate() {
-        Toast.makeText(this, "Descarregant actualització en segon pla...", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, getString(R.string.toast_downloading_update_background), Toast.LENGTH_LONG).show();
 
         final android.app.NotificationManager notificationManager = (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         final String channelId = "UpdateChannel";
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             android.app.NotificationChannel channel = new android.app.NotificationChannel(
-                    channelId, "Actualitzacions", android.app.NotificationManager.IMPORTANCE_HIGH);
+                    channelId, getString(R.string.channel_updates_name), android.app.NotificationManager.IMPORTANCE_HIGH);
             notificationManager.createNotificationChannel(channel);
         }
 
         final androidx.core.app.NotificationCompat.Builder builder = new androidx.core.app.NotificationCompat.Builder(this, channelId)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle("Descarregant ResoNode")
-                .setContentText("Calculant grandària...")
+                .setContentTitle(getString(R.string.notif_downloading_app))
+                .setContentText(getString(R.string.notif_calculating_size))
                 .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
@@ -1741,7 +1798,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 try {
                     Request request = new Request.Builder().url(Config.SERVER_URL + "/update/download").build();
                     Response response = client.newCall(request).execute();
-                    if(!response.isSuccessful()) throw new Exception("Error al descarregar");
+                    if(!response.isSuccessful()) throw new Exception(getString(R.string.error_reading_playlist));
 
                     long totalBytes = response.body().contentLength();
                     InputStream is = response.body().byteStream();
@@ -1767,7 +1824,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                             if (progress >= lastProgress + 2) {
                                 lastProgress = progress;
                                 builder.setProgress(100, progress, false)
-                                        .setContentText(progress + "%");
+                                        .setContentText(getString(R.string.progress_percent, progress));
                                 notificationManager.notify(notificationId, builder.build());
                             }
                         }
@@ -1775,8 +1832,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     fos.close(); is.close();
                     final File finalF = f;
 
-                    builder.setContentTitle("Descàrrega completada")
-                            .setContentText("Llest per instal·lar")
+                    builder.setContentTitle(getString(R.string.notif_download_complete_title))
+                            .setContentText(getString(R.string.notif_ready_to_install))
                             .setProgress(0, 0, false)
                             .setOngoing(false);
                     notificationManager.notify(notificationId, builder.build());
@@ -1788,15 +1845,15 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     });
 
                 } catch(Exception e) {
-                    builder.setContentTitle("Error de descàrrega")
-                            .setContentText("No s'ha pogut baixar l'actualització")
+                    builder.setContentTitle(getString(R.string.notif_download_error_title))
+                            .setContentText(getString(R.string.notif_download_error_text))
                             .setProgress(0, 0, false)
                             .setOngoing(false);
                     notificationManager.notify(notificationId, builder.build());
 
                     mainHandler.post(new Runnable() {
                         @Override public void run() {
-                            Toast.makeText(MainActivity.this, "Error actualitzant", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_update_error), Toast.LENGTH_SHORT).show();
                         }
                     });
                 }
@@ -1806,13 +1863,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private void showUpdateDialog(int version) {
         new AlertDialog.Builder(this)
-                .setTitle("¡Nova versió disponible! v" + version)
-                .setMessage("És necesari instal·lar esta actualizació.")
+                .setTitle(getString(R.string.title_new_version_available, version))
+                .setMessage(getString(R.string.msg_update_required))
                 .setCancelable(false)
-                .setPositiveButton("ACTUALITZAR", new DialogInterface.OnClickListener() {
+                .setPositiveButton(getString(R.string.btn_update), new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface dialog, int which) { downloadAndInstallUpdate(); }
                 })
-                .setNegativeButton("TANCAR", new DialogInterface.OnClickListener() {
+                .setNegativeButton(getString(R.string.btn_close), new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface dialog, int which) { finishAffinity(); System.exit(0); }
                 }).show();
     }
@@ -1838,9 +1895,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private void deleteOfflinePlaylist(final MusicItem item) {
         new AlertDialog.Builder(this)
-                .setTitle("Borrar descàrregues")
-                .setMessage("Eliminar els arxius deescarregats de '" + item.getName() + "'? (La playlist seguirà al servidor)")
-                .setPositiveButton("BORRAR", new DialogInterface.OnClickListener() {
+                .setTitle(getString(R.string.title_delete_downloads))
+                .setMessage(getString(R.string.msg_delete_downloads_confirm, item.getName()))
+                .setPositiveButton(getString(R.string.btn_delete), new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         List<String> files = offlineDB.getPlaylistFilePaths(item.getName());
@@ -1857,30 +1914,58 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
                         offlineDB.deletePlaylist(item.getName());
 
-                        Toast.makeText(MainActivity.this, "Descargàrregues eliminades", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, getString(R.string.toast_downloads_deleted), Toast.LENGTH_SHORT).show();
                         adapter.notifyDataSetChanged();
                     }
                 })
-                .setNegativeButton("CANCEL·LAR", null)
+                .setNegativeButton(getString(R.string.btn_cancel), null)
                 .show();
     }
 
     private void handleNetworkChange(boolean isConnected) {
 
-        if (isConnected) {
-            if (tvStatus.getVisibility() == View.VISIBLE && tvStatus.getText().toString().contains("Connexió")) {
-                tvStatus.setVisibility(View.GONE);
-                Toast.makeText(this, "Connexió reestablerta", Toast.LENGTH_SHORT).show();
+        if (lastKnownConnectionState != null && lastKnownConnectionState == isConnected) {
+            return;
+        }
+        lastKnownConnectionState = isConnected;
 
-                if (!currentPath.isEmpty() && !currentPath.startsWith("/")) {
-                    fetchMusicContent(Config.SERVER_URL, currentPath);
+        if (isConnected) {
+            tvStatus.setVisibility(View.GONE);
+            Toast.makeText(this, getString(R.string.toast_connection_restored), Toast.LENGTH_SHORT).show();
+
+            mainHandler.postDelayed(() -> {
+                if (session.hasInvitationCode()) {
+                    UrlFetcher.fetchLatestUrl(session.getInvitationCode(), new UrlFetcher.UrlCallback() {
+                        @Override
+                        public void onUrlFound(String url) {
+                            Config.SERVER_URL = url;
+                            getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
+                                    .edit().putString("last_server_url", url).apply();
+                            runOnUiThread(() -> refreshCurrentContent());
+                        }
+                        @Override
+                        public void onError(Exception e) {
+                            runOnUiThread(() -> refreshCurrentContent());
+                        }
+                    });
+                } else {
+                    refreshCurrentContent();
                 }
-            }
+            }, 1500);
         } else {
-            if (tvStatus.getVisibility() == View.GONE) {
-                tvStatus.setText("Mode Sense Connexió");
-                tvStatus.setVisibility(View.VISIBLE);
-            }
+            tvStatus.setText(getString(R.string.status_offline_mode));
+            tvStatus.setVisibility(View.VISIBLE);
+        }
+    }
+    private void refreshCurrentContent() {
+        needsUrlRefresh = false;
+
+        boolean isSingleSharedSongPreview = isSharedPreview
+                && musicList.size() == 1
+                && !musicList.get(0).isFolder();
+
+        if (!isSingleSharedSongPreview) {
+            fetchMusicContent(Config.SERVER_URL, currentPath);
         }
     }
 
@@ -1888,10 +1973,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (isPackageInstalled(oldPackageName, getPackageManager())) {
 
             new AlertDialog.Builder(this)
-                    .setTitle("Actualització Crítica")
-                    .setMessage("S'ha detectat una versió antiga (SpotiFly). És necessari desinstal·lar-la per a continuar. (Les cançons descarregades les hauràs de descarregar de nou a aquesta versió)")
+                    .setTitle(getString(R.string.title_critical_update))
+                    .setMessage(getString(R.string.msg_old_app_detected))
                     .setCancelable(false)
-                    .setPositiveButton("DESINSTAL·LAR ARA", new DialogInterface.OnClickListener() {
+                    .setPositiveButton(getString(R.string.btn_uninstall_now), new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
                             try {
@@ -1905,15 +1990,15 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                     Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
                                     intent.setData(Uri.parse("package:" + oldPackageName));
                                     startActivity(intent);
-                                    Toast.makeText(MainActivity.this, "Prem el botó 'Desinstal·lar' en la pantalla que s'ha obert.", Toast.LENGTH_LONG).show();
+                                    Toast.makeText(MainActivity.this, getString(R.string.toast_press_uninstall_button), Toast.LENGTH_LONG).show();
                                 } catch (Exception ex) {
-                                    Toast.makeText(MainActivity.this, "Error: No s'ha pogut obrir el desinstal·lador.", Toast.LENGTH_LONG).show();
+                                    Toast.makeText(MainActivity.this, getString(R.string.toast_uninstaller_error), Toast.LENGTH_LONG).show();
                                 }
                             }
                         }
                     })
 
-                    .setNegativeButton("TANCAR", new DialogInterface.OnClickListener() {
+                    .setNegativeButton(getString(R.string.btn_close), new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
                         }
@@ -2023,8 +2108,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private String[] getAudioMetadata(Uri uri) {
-        String title = "Arxiu Desconegut";
-        String artist = "Dispositiu Local";
+        String title = getString(R.string.unknown_file);
+        String artist = getString(R.string.local_device);
         android.media.MediaMetadataRetriever retriever = new android.media.MediaMetadataRetriever();
         try {
             retriever.setDataSource(this, uri);
@@ -2213,18 +2298,18 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         mainHandler.post(new Runnable() {
                             @Override public void run() {
                                 if (pList.isEmpty()) {
-                                    Toast.makeText(MainActivity.this, "Crea primer una playlist per afegir cançons!", Toast.LENGTH_LONG).show();
+                                    Toast.makeText(MainActivity.this, getString(R.string.msg_create_playlist_first), Toast.LENGTH_LONG).show();
                                     return;
                                 }
 
                                 new AlertDialog.Builder(MainActivity.this)
-                                        .setTitle("On vols afegir-la?")
+                                        .setTitle(getString(R.string.title_new_playlist_name))
                                         .setItems(pList.toArray(new String[0]), new DialogInterface.OnClickListener() {
                                             @Override public void onClick(DialogInterface d, int w) {
                                                 String selectedPlaylist = pList.get(w);
 
                                                 offlineDB.saveSong(audioUri.toString(), title, selectedPlaylist, audioUri.toString(), artist);
-                                                Toast.makeText(MainActivity.this, "Afegida a " + selectedPlaylist, Toast.LENGTH_SHORT).show();
+                                                Toast.makeText(MainActivity.this, getString(R.string.toast_added_to_playlist, selectedPlaylist), Toast.LENGTH_SHORT).show();
 
                                                 if (currentPath.equals(selectedPlaylist)) {
                                                     fetchMusicContent(Config.SERVER_URL, currentPath);
@@ -2235,7 +2320,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         });
                     }
                 } catch(Exception e) {
-                    mainHandler.post(() -> Toast.makeText(MainActivity.this, "Error carregant les playlists", Toast.LENGTH_SHORT).show());
+                    mainHandler.post(() -> Toast.makeText(MainActivity.this, getString(R.string.error_loading_playlists), Toast.LENGTH_SHORT).show());
                 }
             }
         });
@@ -2279,7 +2364,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void sharePlaylist(final MusicItem playlist) {
-        Toast.makeText(this, "Generant enllaç...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, getString(R.string.toast_generating_link), Toast.LENGTH_SHORT).show();
 
         executor.execute(new Runnable() {
             @Override
@@ -2310,18 +2395,18 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                 Intent sendIntent = new Intent();
                                 sendIntent.setAction(Intent.ACTION_SEND);
 
-                                String missatge = "Escolta la playlist \"" + playlist.getName() + "\" a ResoNode!\n\n" + shareLink;
+                                String missatge = getString(R.string.share_message_template, playlist.getName(), shareLink);
 
                                 sendIntent.putExtra(Intent.EXTRA_TEXT, missatge);
                                 sendIntent.setType("text/plain");
-                                startActivity(Intent.createChooser(sendIntent, "Compartir amb..."));
+                                startActivity(Intent.createChooser(sendIntent, getString(R.string.chooser_share_with)));
                             }
                         });
                     } else {
-                        mainHandler.post(() -> Toast.makeText(MainActivity.this, "Error al servidor", Toast.LENGTH_SHORT).show());
+                        mainHandler.post(() -> Toast.makeText(MainActivity.this, getString(R.string.toast_server_error_share), Toast.LENGTH_SHORT).show());
                     }
                 } catch (Exception e) {
-                    mainHandler.post(() -> Toast.makeText(MainActivity.this, "Error de connexió", Toast.LENGTH_SHORT).show());
+                    mainHandler.post(() -> Toast.makeText(MainActivity.this, getString(R.string.error_connection_generic), Toast.LENGTH_SHORT).show());
                 }
             }
         });
@@ -2329,7 +2414,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private void resolveSharedToken(final String token) {
         ProgressDialog pd = new ProgressDialog(this);
-        pd.setMessage("Obrint previsualització...");
+        pd.setMessage(getString(R.string.progress_opening_preview));
         pd.show();
         executor.execute(() -> {
             try {
@@ -2341,7 +2426,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     final String owner = json.getString("owner");
                     final String path = json.getString("path");
                     final String name = json.getString("name");
-                    final String artist = json.optString("artist", "Desconegut");
+                    final String artist = json.optString("artist", getString(R.string.unknown_artist));
 
                     mainHandler.post(() -> {
                         pd.dismiss();
@@ -2370,10 +2455,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         }
                     });
                 } else {
-                    mainHandler.post(() -> { pd.dismiss(); Toast.makeText(MainActivity.this, "Enllaç invàlid o caducat", Toast.LENGTH_SHORT).show(); });
+                    mainHandler.post(() -> { pd.dismiss(); Toast.makeText(MainActivity.this, getString(R.string.toast_invalid_expired_link), Toast.LENGTH_SHORT).show(); });
                 }
             } catch (Exception e) {
-                mainHandler.post(() -> { pd.dismiss(); Toast.makeText(MainActivity.this, "Error de xarxa", Toast.LENGTH_SHORT).show(); });
+                mainHandler.post(() -> { pd.dismiss(); Toast.makeText(MainActivity.this, getString(R.string.error_network), Toast.LENGTH_SHORT).show(); });
             }
         });
     }
@@ -2385,7 +2470,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 if(r.isSuccessful()){
                     JSONArray a=new JSONObject(r.body().string()).getJSONArray("items");
                     final List<String> n=new ArrayList<>();
-                    n.add("Nova...");
+                    n.add(getString(R.string.item_new_ellipsis));
                     for(int x=0;x<a.length();x++) if(a.getJSONObject(x).getString("type").equals("folder")) n.add(a.getJSONObject(x).getString("name"));
                     mainHandler.post(() -> {
                         new AlertDialog.Builder(MainActivity.this).setItems(n.toArray(new String[0]), (d, w) -> {
@@ -2401,9 +2486,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private void showCreatePlaylistForSharedAddDialog(final List<MusicItem> s) {
         EditText i = new EditText(this);
         new AlertDialog.Builder(this)
-                .setTitle("Nom de la playlist")
+                .setTitle(getString(R.string.title_playlist_name))
                 .setView(i)
-                .setPositiveButton("OK", (d, w) -> {
+                .setPositiveButton(getString(R.string.btn_ok), (d, w) -> {
                     JSONObject j=new JSONObject();
                     try{ j.put("username",session.getUsername()); j.put("playlist_name",i.getText().toString()); }catch(Exception e){}
                     postJson("/playlist/create", j.toString(), () -> addSharedSongsToPlaylist(i.getText().toString(), s));
@@ -2423,7 +2508,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         postJson("/share/import_items", j.toString(), () -> {
             mainHandler.post(() -> {
                 adapter.setSelectionMode(false);
-                Toast.makeText(MainActivity.this, "Cançó/ons importades a " + playlistName, Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, getString(R.string.toast_songs_imported_to, playlistName), Toast.LENGTH_SHORT).show();
             });
         });
     }
@@ -2456,10 +2541,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
                     if (!isVerified) {
                         new AlertDialog.Builder(this)
-                                .setTitle("Activar Enllaços Directes")
-                                .setMessage("Per a que els enllaços de Telegram o WhatsApp òbriguen directament la playlist en ResoNode, necessites donar permís a l'aplicació.\n\nA la següent pantalla, prem 'Afig un enllaç' i marca '" + domain + "'.")
+                                .setTitle(getString(R.string.title_enable_direct_links))
+                                .setMessage(getString(R.string.msg_enable_direct_links, domain))
                                 .setCancelable(false)
-                                .setPositiveButton("CONFIGURAR ARA", new DialogInterface.OnClickListener() {
+                                .setPositiveButton(getString(R.string.btn_configure_now), new DialogInterface.OnClickListener() {
                                     @Override
                                     public void onClick(DialogInterface dialog, int which) {
                                         Intent intent = new Intent(android.provider.Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS);
@@ -2467,13 +2552,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                         startActivity(intent);
                                     }
                                 })
-                                .setNegativeButton("IGNORAR PER SEMPRE", new DialogInterface.OnClickListener() {
+                                .setNegativeButton(getString(R.string.btn_ignore_forever), new DialogInterface.OnClickListener() {
                                     @Override
                                     public void onClick(DialogInterface dialog, int which) {
                                         prefs.edit().putBoolean("ignore_app_links", true).apply();
                                     }
                                 })
-                                .setNeutralButton("MÉS TARD", null)
+                                .setNeutralButton(getString(R.string.btn_later), null)
                                 .show();
                     }
                 }
@@ -2484,11 +2569,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void launchJellyfinServer() {
-        Toast.makeText(this, "Connectant amb el servidor d'Anime...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, getString(R.string.toast_connecting_anime_server), Toast.LENGTH_SHORT).show();
 
         executor.execute(() -> {
             try {
-                // 1. Demanem la URL al backend
                 Request request = new Request.Builder()
                         .url(Config.SERVER_URL + "/anime/server")
                         .build();
@@ -2501,28 +2585,25 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     final String animeUrl = json.getString("url");
 
                     mainHandler.post(() -> {
-                        // 2. Copiem la URL al porta-retalls automàticament
                         android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                         android.content.ClipData clip = android.content.ClipData.newPlainText("Jellyfin URL", animeUrl);
                         clipboard.setPrimaryClip(clip);
 
-                        Toast.makeText(MainActivity.this, "URL copiada! Apega-la al servidor de Jellyfin.", Toast.LENGTH_LONG).show();
+                        Toast.makeText(MainActivity.this, getString(R.string.toast_url_copied_jellyfin), Toast.LENGTH_LONG).show();
 
-                        // 3. Obrim l'app oficial de Jellyfin
                         Intent launchIntent = getPackageManager().getLaunchIntentForPackage("org.jellyfin.mobile");
                         if (launchIntent != null) {
                             startActivity(launchIntent);
                         } else {
-                            // Si no la té instal·lada, l'enviem al Google Play
-                            Toast.makeText(MainActivity.this, "Instal·la Jellyfin primer", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_install_jellyfin_first), Toast.LENGTH_SHORT).show();
                             startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=org.jellyfin.mobile")));
                         }
                     });
                 } else {
-                    mainHandler.post(() -> Toast.makeText(MainActivity.this, "No s'ha trobat la URL de l'Anime", Toast.LENGTH_SHORT).show());
+                    mainHandler.post(() -> Toast.makeText(MainActivity.this, getString(R.string.toast_anime_url_not_found), Toast.LENGTH_SHORT).show());
                 }
             } catch (Exception e) {
-                mainHandler.post(() -> Toast.makeText(MainActivity.this, "Error de connexió", Toast.LENGTH_SHORT).show());
+                mainHandler.post(() -> Toast.makeText(MainActivity.this, getString(R.string.error_connection_generic), Toast.LENGTH_SHORT).show());
             }
         });
     }

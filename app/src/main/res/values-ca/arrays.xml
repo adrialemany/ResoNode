@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="play_nav_style_display">
+        <item>HUD (Per defecte)</item>
+        <item>Hexàgon</item>
+        <item>Glitch</item>
+        <item>Original</item>
+    </string-array>
+    <string-array name="icon_color_display">
+        <item>Or ResoNode</item>
+        <item>Groc Night City</item>
+        <item>Roig Arasaka</item>
+        <item>Blanc</item>
+        <item>Verd Matrix</item>
+        <item>Cian Neó</item>
+    </string-array>
+</resources>

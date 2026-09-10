@@ -242,15 +242,13 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
     private void handlePlaybackError() {
         failureCount++;
         if (failureCount < MAX_RETRIES) {
-            // ✅ Reintentar la misma canción con delay, no saltar
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
                 if (currentIndex != -1 && !playlist.isEmpty()) {
                     playInternal(playlist.get(currentIndex));
                 }
-            }, 1500); // 1.5s de espera antes de reintentar
+            }, 1500);
         } else {
             failureCount = 0;
-            // Solo después de 3 fallos reales, pasar a la siguiente
             new Handler(Looper.getMainLooper()).post(() -> {
                 Toast.makeText(getApplicationContext(), "Error reproducció", Toast.LENGTH_SHORT).show();
                 playNext();

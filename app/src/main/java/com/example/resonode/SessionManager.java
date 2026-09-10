@@ -9,6 +9,8 @@ public class SessionManager {
     private static final String KEY_USERNAME = "username";
     private static final String KEY_IS_LOGGED_IN = "isLoggedIn";
 
+    private static final String KEY_INVITATION_CODE = "invitation_code";
+
     private static final String KEY_DEVICE_MODEL = "device_model";
 
     private static final String KEY_WRAPPED_ENABLED = "wrapped_enabled";
@@ -68,5 +70,18 @@ public class SessionManager {
 
     public boolean isWrappedPublic() {
         return pref.getBoolean(KEY_WRAPPED_PUBLIC, false);
+    }
+
+    public void saveInvitationCode(String code) {
+        editor.putString(KEY_INVITATION_CODE, code);
+        editor.commit();
+    }
+
+    public String getInvitationCode() {
+        return pref.getString(KEY_INVITATION_CODE, null);
+    }
+
+    public boolean hasInvitationCode() {
+        return pref.getString(KEY_INVITATION_CODE, null) != null;
     }
 }

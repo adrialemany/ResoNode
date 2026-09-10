@@ -1,0 +1,259 @@
+<resources>
+    <string name="app_name">ResoNode</string>
+
+    <string name="navigation_drawer_open">Obrir menú lateral</string>
+    <string name="navigation_drawer_close">Tancar menú lateral</string>
+
+    <string name="menu_settings">Configuració</string>
+
+    <string name="label_language">Idioma</string>
+    <string name="toast_profile_pic_updated">Foto de perfil actualitzada!</string>
+
+    <!-- Login -->
+    <string name="error_missing_username">Falta usuari</string>
+    <string name="error_missing_password">Falta contrassenya</string>
+    <string name="error_missing_invitation_code">Falta el Codi d\'Invitació</string>
+    <string name="error_invalid_invitation_code">Codi d\'Invitació invàlid o error de xarxa</string>
+    <string name="error_wrong_password">Contrassenya incorrecta</string>
+    <string name="error_security_invalid_key">Error de seguretat (Secret Key invàlida)</string>
+    <string name="error_server_code">Error Servidor: %1$d</string>
+    <string name="error_connection">Error connexió: %1$s</string>
+    <string name="toast_account_created">Compte creat!</string>
+    <string name="error_register_failed">No s\'ha pogut registrar: %1$s</string>
+    <string name="error_register_generic">Error registre: %1$s</string>
+    <string name="btn_connecting">Connectant...</string>
+    <string name="btn_login_register">ENTRAR / REGISTRAR</string>
+
+    <!-- MainActivity -->
+    <string name="msg_create_playlist_first">Crea primer una playlist per afegir cançons!</string>
+    <string name="title_add_songs_count">On vols afegir %1$d cançons?</string>
+    <string name="toast_songs_added_count">%1$d cançons afegides a %2$s</string>
+    <string name="error_loading_playlists">Error carregant les playlists</string>
+
+    <string name="status_server_restarted_searching">Servidor reiniciat. Cercant nova adreça...</string>
+    <string name="status_server_error_offline">Error Servidor (Offline?)</string>
+    <string name="status_no_connection">Sense Connexió</string>
+    <string name="error_visual">Error visual: %1$s</string>
+    <string name="toast_server_found_reconnecting">Servidor trobat! Reconnectant...</string>
+    <string name="status_server_unavailable">Servidor no disponible</string>
+
+    <string name="title_offline_mode">Mode Offline</string>
+    <string name="title_local_playlist">%1$s (Local)</string>
+    <string name="status_offline_mode">Mode Sense Connexió</string>
+
+    <string name="title_public">PÚBLICA</string>
+    <string name="error_play_failed">Error al reproduir</string>
+    <string name="artist_playlist_default">Playlist</string>
+    <string name="artist_resonode_music">ResoNode Music</string>
+
+    <string name="menu_create_playlist">Crear Playlist</string>
+    <string name="menu_add_from_public_playlist">Afegir de Playlist Pública</string>
+    <string name="menu_search_vault">Buscar en Bòveda</string>
+    <string name="menu_add_local_song">Afegir Cançó Local</string>
+
+    <string name="action_delete">Eliminar</string>
+    <string name="action_rename">Reanomenar</string>
+    <string name="action_add_to_playlist">Afegir a Playlist</string>
+    <string name="action_download_offline">Descarregar Offline</string>
+    <string name="action_delete_offline">Borrar Offline</string>
+    <string name="action_change_cover">Canviar Portada</string>
+    <string name="action_share">Compartir</string>
+    <string name="chooser_select_cover">Selecciona una portada</string>
+
+    <string name="toolbar_add_count">AFEGIR (%1$d)</string>
+    <string name="toolbar_selected_count">%1$d sel.</string>
+
+    <string name="title_delete_songs_count">Borrar %1$d cançons?</string>
+    <string name="msg_delete_songs_confirm">Aquesta acció eliminarà les cançons seleccionades de la playlist.</string>
+    <string name="btn_yes">SI</string>
+    <string name="btn_no">NO</string>
+    <string name="toast_local_songs_removed">Cançons locals eliminades</string>
+
+    <string name="toast_playlist_already_downloaded">Esta playlist ja està descarregada</string>
+    <string name="toast_starting_download">Iniciant descàrrega...</string>
+    <string name="channel_downloads_name">Descàrregues de Música</string>
+    <string name="notif_downloading_title">Descarregant %1$s</string>
+    <string name="notif_calculating_songs">Calculant cançons...</string>
+    <string name="notif_download_progress">[%1$d%%] %2$s</string>
+    <string name="toast_downloaded_count">Descarregades %1$d cançons</string>
+    <string name="toast_generic_error">Error: %1$s</string>
+    <string name="error_reading_playlist">Error al llegir playlist</string>
+
+    <string name="progress_uploading_cover">Pujant portada...</string>
+    <string name="toast_cover_updated">Portada Actualizada!</string>
+    <string name="toast_upload_failed">Fallo al subir: %1$s</string>
+
+    <string name="error_server_generic">Error servidor</string>
+
+    <string name="title_new">Nova</string>
+    <string name="btn_ok">OK</string>
+    <string name="title_delete">Borrar</string>
+    <string name="toast_local_song_removed">Cançó local eliminada</string>
+    <string name="title_rename">Renombrar</string>
+
+    <string name="item_new_ellipsis">Nova...</string>
+    <string name="title_new_playlist_name">Nom de la nova playlist</string>
+    <string name="toast_added_to_playlist">Afegit a %1$s</string>
+    <string name="title_name">Nombre</string>
+    <string name="title_playlist_name">Nom de la playlist</string>
+
+    <string name="changelog_default">Millores generals.</string>
+    <string name="title_whats_new">Novetats v%1$d!</string>
+    <string name="btn_great">GENIAL</string>
+
+    <string name="toast_downloading_update_background">Descarregant actualització en segon pla...</string>
+    <string name="channel_updates_name">Actualitzacions</string>
+    <string name="notif_downloading_app">Descarregant ResoNode</string>
+    <string name="notif_calculating_size">Calculant grandària...</string>
+    <string name="progress_percent">%1$d%%</string>
+    <string name="notif_download_complete_title">Descàrrega completada</string>
+    <string name="notif_ready_to_install">Llest per instal·lar</string>
+    <string name="notif_download_error_title">Error de descàrrega</string>
+    <string name="notif_download_error_text">No s\'ha pogut baixar l\'actualització</string>
+    <string name="toast_update_error">Error actualitzant</string>
+
+    <string name="title_new_version_available">¡Nova versió disponible! v%1$d</string>
+    <string name="msg_update_required">És necesari instal·lar esta actualizació.</string>
+    <string name="btn_update">ACTUALITZAR</string>
+    <string name="btn_close">TANCAR</string>
+
+    <string name="title_delete_downloads">Borrar descàrregues</string>
+    <string name="msg_delete_downloads_confirm">Eliminar els arxius deescarregats de \'%1$s\'? (La playlist seguirà al servidor)</string>
+    <string name="btn_delete">BORRAR</string>
+    <string name="btn_cancel">CANCEL·LAR</string>
+    <string name="toast_downloads_deleted">Descargàrregues eliminades</string>
+
+    <string name="toast_connection_restored">Connexió reestablerta</string>
+
+    <string name="title_critical_update">Actualització Crítica</string>
+    <string name="msg_old_app_detected">S\'ha detectat una versió antiga (SpotiFly). És necessari desinstal·lar-la per a continuar. (Les cançons descarregades les hauràs de descarregar de nou a aquesta versió)</string>
+    <string name="btn_uninstall_now">DESINSTAL·LAR ARA</string>
+    <string name="toast_press_uninstall_button">Prem el botó \'Desinstal·lar\' en la pantalla que s\'ha obert.</string>
+    <string name="toast_uninstaller_error">Error: No s\'ha pogut obrir el desinstal·lador.</string>
+
+    <string name="title_enable_direct_links">Activar Enllaços Directes</string>
+    <string name="msg_enable_direct_links">Per a que els enllaços de Telegram o WhatsApp òbriguen directament la playlist en ResoNode, necessites donar permís a l\'aplicació.\n\nA la següent pantalla, prem \'Afig un enllaç\' i marca \'%1$s\'.</string>
+    <string name="btn_configure_now">CONFIGURAR ARA</string>
+    <string name="btn_ignore_forever">IGNORAR PER SEMPRE</string>
+    <string name="btn_later">MÉS TARD</string>
+
+    <string name="toast_connecting_anime_server">Connectant amb el servidor d\'Anime...</string>
+    <string name="toast_url_copied_jellyfin">URL copiada! Apega-la al servidor de Jellyfin.</string>
+    <string name="toast_install_jellyfin_first">Instal·la Jellyfin primer</string>
+    <string name="toast_anime_url_not_found">No s\'ha trobat la URL de l\'Anime</string>
+    <string name="error_connection_generic">Error de connexió</string>
+
+    <string name="toast_generating_link">Generant enllaç...</string>
+    <string name="share_message_template">Escolta la playlist \"%1$s\" a ResoNode!\n\n%2$s</string>
+    <string name="chooser_share_with">Compartir amb...</string>
+    <string name="toast_server_error_share">Error al servidor</string>
+
+    <string name="progress_opening_preview">Obrint previsualització...</string>
+    <string name="unknown_artist">Desconegut</string>
+    <string name="toast_invalid_expired_link">Enllaç invàlid o caducat</string>
+    <string name="error_network">Error de xarxa</string>
+
+    <string name="toast_songs_imported_to">Cançó/ons importades a %1$s</string>
+
+    <string name="unknown_file">Arxiu Desconegut</string>
+    <string name="local_device">Dispositiu Local</string>
+
+    <!-- Login screen -->
+    <string name="title_login">ResoNode Login</string>
+    <string name="hint_username">Nom d\'Usuari</string>
+    <string name="hint_password">Contrasenya</string>
+    <string name="hint_invitation_code">Codi d\'Invitació (Només 1a volta)</string>
+
+    <!-- Splash screen -->
+    <string name="tagline_music_unlimited">Music Unlimited</string>
+    <string name="status_connecting_server">Connectant amb el servidor...</string>
+
+    <!-- Settings screen -->
+    <string name="section_your_profile">EL TEU PERFIL</string>
+    <string name="btn_change_photo">CANVIAR FOTO</string>
+    <string name="section_resonode_wrapped">RESONODE WRAPPED</string>
+    <string name="switch_enable_stats">Activar recopilació d\'estadístiques</string>
+    <string name="option_private">Privat (Sols per a tu)</string>
+    <string name="option_public">Públic (Visible per altres usuaris)</string>
+    <string name="section_player_customization">PERSONALITZACIÓ DEL REPRODUCTOR</string>
+    <string name="label_play_pause_style">Estil del botó Play / Pause</string>
+    <string name="label_prev_next_style">Estil dels botons Anterior / Següent</string>
+    <string name="label_player_icon_color">Color de les icones del reproductor</string>
+    <string name="switch_pure_black_mode">Mode Negre Pur (AMOLED)</string>
+    <string name="section_this_device">AQUEST DISPOSITIU</string>
+    <string name="label_loading">Carregant...</string>
+    <string name="section_other_linked_devices">ALTRES DISPOSITIUS VINCULATS</string>
+    <string name="section_storage_audio">EMMAGATZEMATGE I ÀUDIO</string>
+    <string name="label_downloaded_music">Música Descarregada</string>
+    <string name="label_calculating">Calculant...</string>
+    <string name="btn_clear">NETEJAR</string>
+    <string name="btn_open_system_equalizer">Obrir Equalitzador del Sistema</string>
+    <string name="section_source_code">CODI FONT</string>
+    <string name="label_open_source_description">Aquest projecte és Open Source. Pots consultar el codi a GitHub.</string>
+    <string name="url_github" translatable="false">https://github.com/adrialemany/ResoNode</string>
+    <string name="section_privacy_data">PRIVACITAT I DADES</string>
+    <string name="desc_privacy_data">Aquesta aplicació no fa cap ús comercial de les dades. La privacitat és el motiu principal de l\'existència de ResoNode. No es fa cap recol·lecció de dades més enllà del model del dispositiu (per seguretat del desenvolupador) i les estadístiques de música si actives l\'opció \'Wrapped\' superior (minuts escoltats i nº reproduccions). Si està desactivat, no es guarda res.</string>
+    <string name="label_version_placeholder">ResoNode v...</string>
+
+    <!-- Search screen -->
+    <string name="hint_search_artists_songs">Buscar artistes, cançons...</string>
+    <string name="label_artists_in_vault">Artistes a la Bòveda</string>
+
+    <!-- Wrapped screen -->
+    <string name="label_time_listened">TEMPS ESCOLTAT</string>
+    <string name="label_minutes_placeholder">0 min</string>
+    <string name="label_top_5_songs">TOP 5 CANÇONS</string>
+    <string name="label_no_data_period">No hi ha dades suficients per a aquest període.</string>
+
+    <!-- Nav header -->
+    <string name="label_user_placeholder">Usuari</string>
+
+    <!-- List items -->
+    <string name="label_playlist_name_placeholder">Nom de la Playlist</string>
+
+    <!-- Main toolbar -->
+    <string name="label_app_name_caps" translatable="false">RESONODE</string>
+    <string name="label_toolbar_action_placeholder">AFEGIR</string>
+
+    <!-- Splash screen -->
+    <string name="status_starting_offline">Iniciant offline...</string>
+    <string name="status_syncing">Sincronitzant...</string>
+
+    <!-- PlaylistAdapter -->
+    <string name="label_public_playlists_display">Playlists Públiques</string>
+    <string name="label_type_artist">Artista</string>
+    <string name="label_type_album">Àlbum</string>
+    <string name="label_type_playlist">Playlist</string>
+    <string name="label_type_song">Cançó</string>
+
+    <!-- WrappedActivity -->
+    <string name="label_week">Setmana</string>
+    <string name="label_month">Mes</string>
+    <string name="label_year">Any</string>
+    <string name="title_my_wrapped">El meu Wrapped</string>
+    <string name="title_wrapped_of">Wrapped de %1$s</string>
+    <string name="menu_community">Comunitat</string>
+    <string name="toast_enable_wrapped_first">Activa el Wrapped a Configuració primer.</string>
+    <string name="label_my_profile_emoji">👤 El meu perfil</string>
+    <string name="title_community_ranking">Rànquing Comunitat (%1$s)</string>
+    <string name="msg_offline_cant_view_others">Sense connexió. No es poden veure dades d\'altres usuaris.</string>
+    <string name="label_private_status">Privat</string>
+    <string name="msg_user_profile_private">Aquest usuari té el perfil privat.</string>
+    <string name="toast_offline_showing_local_data">Mode Offline: Mostrant dades locals</string>
+    <string name="label_plays_count">%1$d reproduccions</string>
+    <string name="label_minutes_short">%1$d min</string>
+    <string name="label_hours_short">%1$.1f h</string>
+
+    <string name="label_app_version">ResoNode v%1$s</string>
+    <string name="toast_no_equalizer_found">No s\'ha trobat cap equalitzador</string>
+    <string name="label_no_other_devices">Cap altre dispositiu vinculat</string>
+    <string name="title_delete_offline_music">Esborrar música offline</string>
+    <string name="msg_delete_offline_music_confirm">Estàs segur que vols eliminar tota la música descarregada d\'aquest dispositiu?</string>
+    <string name="btn_delete_offline_music">Esborrar</string>
+    <string name="toast_offline_music_deleted">Música descarregada eliminada</string>
+
+    <string name="menu_home">Inici</string>
+    <string name="menu_account">Compte</string>
+    <string name="menu_anime">Servidor d\'Anime</string>
+    <string name="menu_logout">Tancar Sessió</string>
+</resources>

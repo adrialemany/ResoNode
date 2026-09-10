@@ -1,5 +1,6 @@
 package com.example.resonode;
 
+import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -30,6 +31,11 @@ import android.content.SharedPreferences;
 
 public class WrappedActivity extends AppCompatActivity {
 
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase));
+    }
+
     private TextView tvTotalTime, tvNoData, tvTotalLabel;
     private LinearLayout llTopSongs;
     private ProgressBar pbLoading;
@@ -44,29 +50,24 @@ public class WrappedActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_wrapped);
-        // --- APLICAR TEMA NEGRE PUR TOTAL AL WRAPPED ---
         SharedPreferences prefs = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE);
         boolean isPureBlack = prefs.getBoolean("pure_black", false);
 
         int bgColor = isPureBlack ? 0xFF000000 : 0xFF121212;
-        int cardColor = isPureBlack ? 0xFF000000 : 0xFF191414; // Un pelet més clar si no és negre pur
+        int cardColor = isPureBlack ? 0xFF000000 : 0xFF191414;
 
-        // 1. Fons de la finestra general
         getWindow().getDecorView().setBackgroundColor(bgColor);
 
-        // 2. El truc de l'arrel: Forcem el primer fill de l'XML a tindre el color correcte
         android.view.ViewGroup contentRoot = findViewById(android.R.id.content);
         if (contentRoot != null && contentRoot.getChildCount() > 0) {
             contentRoot.getChildAt(0).setBackgroundColor(bgColor);
         }
 
-        // 3. Barra Superior (Toolbar)
         Toolbar toolbar = findViewById(R.id.toolbar_wrapped);
         if (toolbar != null) {
             toolbar.setBackgroundColor(cardColor);
         }
 
-        // 4. Les pestanyes del període (TabLayout)
         TabLayout tabLayout = findViewById(R.id.tabs_period);
         if (tabLayout != null) {
             tabLayout.setBackgroundColor(cardColor);
@@ -88,9 +89,9 @@ public class WrappedActivity extends AppCompatActivity {
         pbLoading = findViewById(R.id.pb_loading);
         tabLayout = findViewById(R.id.tabs_period);
 
-        tabLayout.addTab(tabLayout.newTab().setText("Setmana"));
-        tabLayout.addTab(tabLayout.newTab().setText("Mes"));
-        tabLayout.addTab(tabLayout.newTab().setText("Any"));
+        tabLayout.addTab(tabLayout.newTab().setText(getString(R.string.label_week)));
+        tabLayout.addTab(tabLayout.newTab().setText(getString(R.string.label_month)));
+        tabLayout.addTab(tabLayout.newTab().setText(getString(R.string.label_year)));
 
         tabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
             @Override
@@ -105,7 +106,7 @@ public class WrappedActivity extends AppCompatActivity {
         });
 
         if (!session.isWrappedEnabled()) {
-            Toast.makeText(this, "Activa el Wrapped a Configuració primer.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, getString(R.string.toast_enable_wrapped_first), Toast.LENGTH_LONG).show();
             finish();
             return;
         }
@@ -115,19 +116,27 @@ public class WrappedActivity extends AppCompatActivity {
         loadStats();
     }
 
+    private String getPeriodDisplayName(String periodKey) {
+        switch (periodKey) {
+            case "month": return getString(R.string.label_month);
+            case "year": return getString(R.string.label_year);
+            default: return getString(R.string.label_week);
+        }
+    }
+
     private void updateTitle() {
         if (getSupportActionBar() != null) {
             if (viewingUser.equals(session.getUsername())) {
-                getSupportActionBar().setTitle("El meu Wrapped");
+                getSupportActionBar().setTitle(getString(R.string.title_my_wrapped));
             } else {
-                getSupportActionBar().setTitle("Wrapped de " + viewingUser);
+                getSupportActionBar().setTitle(getString(R.string.title_wrapped_of, viewingUser));
             }
         }
     }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        MenuItem item = menu.add(Menu.NONE, 1, Menu.NONE, "Comunitat");
+        MenuItem item = menu.add(Menu.NONE, 1, Menu.NONE, getString(R.string.menu_community));
         item.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS | MenuItem.SHOW_AS_ACTION_WITH_TEXT);
         item.setIcon(android.R.drawable.ic_menu_myplaces);
         return true;
@@ -162,7 +171,7 @@ public class WrappedActivity extends AppCompatActivity {
             public void onFailure(Call call, IOException e) {
                 runOnUiThread(() -> {
                     pbLoading.setVisibility(View.GONE);
-                    Toast.makeText(WrappedActivity.this, "Error de connexió", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(WrappedActivity.this, getString(R.string.error_connection_generic), Toast.LENGTH_SHORT).show();
                 });
             }
 
@@ -181,7 +190,7 @@ public class WrappedActivity extends AppCompatActivity {
                     final List<String> displayNames = new ArrayList<>();
 
                     userNames.add(session.getUsername());
-                    displayNames.add("👤 El meu perfil");
+                    displayNames.add(getString(R.string.label_my_profile_emoji));
 
                     for(int i=0; i<users.length(); i++) {
                         JSONObject u = users.getJSONObject(i);
@@ -197,7 +206,7 @@ public class WrappedActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         pbLoading.setVisibility(View.GONE);
                         new AlertDialog.Builder(WrappedActivity.this)
-                                .setTitle("Rànquing Comunitat (" + currentPeriod + ")")
+                                .setTitle(getString(R.string.title_community_ranking, getPeriodDisplayName(currentPeriod)))
                                 .setItems(displayNames.toArray(new String[0]), (dialog, which) -> {
                                     viewingUser = userNames.get(which);
                                     updateTitle();
@@ -219,7 +228,7 @@ public class WrappedActivity extends AppCompatActivity {
 
         if (!viewingUser.equals(session.getUsername()) && !NetworkReceiver.isConnected(this)) {
             pbLoading.setVisibility(View.GONE);
-            tvNoData.setText("Sense connexió. No es poden veure dades d'altres usuaris.");
+            tvNoData.setText(getString(R.string.msg_offline_cant_view_others));
             tvNoData.setVisibility(View.VISIBLE);
             return;
         }
@@ -247,8 +256,8 @@ public class WrappedActivity extends AppCompatActivity {
                     if (json.has("enabled") && !json.getBoolean("enabled")) {
                         runOnUiThread(() -> {
                             pbLoading.setVisibility(View.GONE);
-                            tvTotalTime.setText("Privat");
-                            tvNoData.setText("Aquest usuari té el perfil privat.");
+                            tvTotalTime.setText(getString(R.string.label_private_status));
+                            tvNoData.setText(getString(R.string.msg_user_profile_private));
                             tvNoData.setVisibility(View.VISIBLE);
                         });
                         return;
@@ -274,7 +283,7 @@ public class WrappedActivity extends AppCompatActivity {
         if (!viewingUser.equals(session.getUsername())) {
             runOnUiThread(() -> {
                 pbLoading.setVisibility(View.GONE);
-                Toast.makeText(WrappedActivity.this, "Error de connexió", Toast.LENGTH_SHORT).show();
+                Toast.makeText(WrappedActivity.this, getString(R.string.error_connection_generic), Toast.LENGTH_SHORT).show();
             });
             return;
         }
@@ -290,7 +299,7 @@ public class WrappedActivity extends AppCompatActivity {
                 JSONArray top = localStats.optJSONArray("top_5");
 
                 pbLoading.setVisibility(View.GONE);
-                Toast.makeText(WrappedActivity.this, "Mode Offline: Mostrant dades locals", Toast.LENGTH_SHORT).show();
+                Toast.makeText(WrappedActivity.this, getString(R.string.toast_offline_showing_local_data), Toast.LENGTH_SHORT).show();
                 updateUI(mins, hours, top);
 
             } catch (Exception e) {
@@ -300,11 +309,11 @@ public class WrappedActivity extends AppCompatActivity {
     }
 
     private void updateUI(int minutes, double hours, JSONArray topSongs) {
-        if (minutes < 60) tvTotalTime.setText(minutes + " min");
-        else tvTotalTime.setText(String.format("%.1f h", hours));
+        if (minutes < 60) tvTotalTime.setText(getString(R.string.label_minutes_short, minutes));
+        else tvTotalTime.setText(getString(R.string.label_hours_short, hours));
 
         if (minutes == 0) {
-            tvNoData.setText("No hi ha dades suficients per a aquest període.");
+            tvNoData.setText(getString(R.string.label_no_data_period));
             tvNoData.setVisibility(View.VISIBLE);
             return;
         }
@@ -351,7 +360,7 @@ public class WrappedActivity extends AppCompatActivity {
         tvName.setEllipsize(android.text.TextUtils.TruncateAt.END);
 
         TextView tvPlays = new TextView(this);
-        tvPlays.setText(plays + " reproduccions");
+        tvPlays.setText(getString(R.string.label_plays_count, plays));
         tvPlays.setTextColor(0xFFAAAAAA);
         tvPlays.setTextSize(12);
 

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="play_nav_style_display">
+        <item>HUD (Default)</item>
+        <item>Hexagon</item>
+        <item>Glitch</item>
+        <item>Original</item>
+    </string-array>
+    <string-array name="icon_color_display">
+        <item>ResoNode Gold</item>
+        <item>Night City Yellow</item>
+        <item>Arasaka Red</item>
+        <item>White</item>
+        <item>Matrix Green</item>
+        <item>Neon Cyan</item>
+    </string-array>
+</resources>

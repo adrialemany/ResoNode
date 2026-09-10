@@ -1,5 +1,5 @@
 package com.example.resonode;
-
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
@@ -13,8 +13,6 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
-
-import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
@@ -30,13 +28,16 @@ import okhttp3.Response;
 
 public class LoginActivity extends AppCompatActivity {
 
-    private static final String API_SECRET_KEY = Config.API_SECRET_KEY;
-
     static {
         AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
     }
 
-    private EditText etUsername, etPassword;
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase));
+    }
+
+    private EditText etUsername, etPassword, etInvitationCode;
     private Button btnAction;
     private ProgressBar progressBar;
     private SessionManager session;
@@ -50,7 +51,7 @@ public class LoginActivity extends AppCompatActivity {
                     public Response intercept(Chain chain) throws IOException {
                         Request original = chain.request();
                         Request request = original.newBuilder()
-                                .header("x-secret-key", API_SECRET_KEY)
+                                .header("x-secret-key", Config.API_SECRET_KEY)
                                 .method(original.method(), original.body())
                                 .build();
                         return chain.proceed(request);
@@ -68,29 +69,30 @@ public class LoginActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
 
-        
-
-        
-        UrlFetcher.fetchLatestUrl(new UrlFetcher.UrlCallback() {
-            @Override
-            public void onUrlFound(final String url) {
-                Config.SERVER_URL = url;
-                runOnUiThread(new Runnable() {
-                    @Override public void run() {
-                        if(!isFinishing()) Toast.makeText(LoginActivity.this, "Servidor connectat", Toast.LENGTH_SHORT).show();
-                    }
-                });
-            }
-            @Override public void onError(Exception e) {}
-        });
-
         session = new SessionManager(this);
-        if (session.isLoggedIn()) { goToMainActivity(); return; }
+
+        if (session.isLoggedIn() && session.hasInvitationCode()) {
+            UrlFetcher.fetchLatestUrl(session.getInvitationCode(), new UrlFetcher.UrlCallback() {
+                @Override
+                public void onUrlFound(String url) {
+                    Config.SERVER_URL = url;
+                    goToMainActivity();
+                }
+                @Override
+                public void onError(Exception e) {
+                }
+            });
+        }
 
         etUsername = findViewById(R.id.et_username);
         etPassword = findViewById(R.id.et_password);
+        etInvitationCode = findViewById(R.id.et_invitation_code);
         btnAction = findViewById(R.id.btn_login_register);
         progressBar = findViewById(R.id.progress_bar);
+
+        if (session.hasInvitationCode() && etInvitationCode != null) {
+            etInvitationCode.setText(session.getInvitationCode());
+        }
 
         btnAction.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { handleAuth(); }
@@ -100,12 +102,41 @@ public class LoginActivity extends AppCompatActivity {
     private void handleAuth() {
         final String username = etUsername.getText().toString().trim();
         final String password = etPassword.getText().toString().trim();
+        final String invCodeInput = etInvitationCode.getText().toString().trim();
 
-        if (TextUtils.isEmpty(username)) { etUsername.setError("Falta usuari"); return; }
-        if (TextUtils.isEmpty(password)) { etPassword.setError("Falta contrassenya"); return; }
+        if (TextUtils.isEmpty(username)) { etUsername.setError(getString(R.string.error_missing_username)); return; }
+        if (TextUtils.isEmpty(password)) { etPassword.setError(getString(R.string.error_missing_password)); return; }
+
+        String codeToUse = invCodeInput;
+        if (TextUtils.isEmpty(codeToUse)) {
+            if (session.hasInvitationCode()) {
+                codeToUse = session.getInvitationCode();
+            } else {
+                etInvitationCode.setError(getString(R.string.error_missing_invitation_code));
+                return;
+            }
+        }
 
         setLoading(true);
+        final String finalCode = codeToUse;
 
+        UrlFetcher.fetchLatestUrl(finalCode, new UrlFetcher.UrlCallback() {
+            @Override
+            public void onUrlFound(final String url) {
+                Config.SERVER_URL = url;
+                session.saveInvitationCode(finalCode);
+
+                proceedWithServerAuth(username, password);
+            }
+
+            @Override
+            public void onError(Exception e) {
+                showError(getString(R.string.error_invalid_invitation_code));
+            }
+        });
+    }
+
+    private void proceedWithServerAuth(final String username, final String password) {
         executor.execute(new Runnable() {
             @Override
             public void run() {
@@ -133,18 +164,18 @@ public class LoginActivity extends AppCompatActivity {
                         attemptRegister(username, password);
                     }
                     else if (loginResponse.code() == 401) {
-                        showError("Contrassenya incorrecta");
+                        showError(getString(R.string.error_wrong_password));
                     }
                     else if (loginResponse.code() == 403) {
-                        showError("Error de seguretat (Secret Key invàlida)");
+                        showError(getString(R.string.error_security_invalid_key));
                     }
                     else {
-                        showError("Error Servidor: " + loginResponse.code());
+                        showError(getString(R.string.error_server_code, loginResponse.code()));
                     }
 
                 } catch (Exception e) {
                     e.printStackTrace();
-                    showError("Error connexió: " + e.getMessage());
+                    showError(getString(R.string.error_connection, e.getMessage()));
                 }
             }
         });
@@ -165,15 +196,15 @@ public class LoginActivity extends AppCompatActivity {
 
             if (response.isSuccessful()) {
                 mainHandler.post(new Runnable() {
-                    @Override public void run() { Toast.makeText(LoginActivity.this, "Compte creat!", Toast.LENGTH_SHORT).show(); }
+                    @Override public void run() { Toast.makeText(LoginActivity.this, getString(R.string.toast_account_created), Toast.LENGTH_SHORT).show(); }
                 });
                 finishLogin(username);
             } else {
-                showError("No s'ha pogut registrar: " + response.body().string());
+                showError(getString(R.string.error_register_failed, response.body().string()));
             }
 
         } catch (Exception e) {
-            showError("Error registre: " + e.getMessage());
+            showError(getString(R.string.error_register_generic, e.getMessage()));
         }
     }
 
@@ -202,8 +233,9 @@ public class LoginActivity extends AppCompatActivity {
                 btnAction.setEnabled(!loading);
                 etUsername.setEnabled(!loading);
                 etPassword.setEnabled(!loading);
-                if (loading) btnAction.setText("Connectant...");
-                else btnAction.setText("ENTRAR / REGISTRAR");
+                if (etInvitationCode != null) etInvitationCode.setEnabled(!loading);
+                if (loading) btnAction.setText(getString(R.string.btn_connecting));
+                else btnAction.setText(getString(R.string.btn_login_register));
             }
         });
     }
