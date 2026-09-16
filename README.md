@@ -97,14 +97,24 @@ An integrated, privacy-focused analytics engine designed to track listening habi
     python api_musica.py
     ```
 
+### User Management
+For security reasons, user registration is strictly tied to server-side directory allocation. Before a user can create an account and log in via the Android app, the administrator must manually create a dedicated folder for them in the server's root directory (e.g., `mkdir Alemany`). 
+
+If this physical folder does not exist, the API will automatically reject any registration attempt to prevent unauthorized access.
+
 ## Client Installation (Android)
 
-1.  Open the project in **Android Studio**.
-2.  **Security Configuration:**
-    * Navigate to `app/src/main/java/com/example/resonode/`.
-    * Rename or use `Config.java` to set up your environment.
-    * Match the `API_SECRET_KEY` exactly with your server.
-3.  **Build:** Compile the APK and install it on the target device.
+You can install the ResoNode client either by downloading the pre-compiled application or by building it manually from the source code.
+
+### Option A: Install via Release (Recommended)
+1. Navigate to the [Releases page](https://github.com/adrialemany/ResoNode/releases) of this repository.
+2. Download the latest `.apk` file to your Android device.
+3. Open the file and install it (you may need to enable "Install from Unknown Sources" in your device settings).
+4. Upon launching the app, enter your server credentials as prompted.
+
+### Option B: Build from Source (Advanced)
+1. Open the project in **Android Studio**.
+2. **Build:** Compile the APK (`Build > Generate Signed Bundle / APK`) and install it on the target device.
 
 ## Remote Management Tools (`/user`)
 
