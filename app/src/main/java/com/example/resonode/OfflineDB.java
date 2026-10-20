@@ -25,6 +25,10 @@ public class OfflineDB extends SQLiteOpenHelper {
     private static final String KEY_FILE_PATH = "file_path";
     private static final String KEY_ARTIST = "artist";
 
+    // Playlists creades sense connexió (poden estar buides). Es crea "lazy" per no pujar DATABASE_VERSION:
+    // onUpgrade esborra les taules de cançons i historial.
+    private static final String TABLE_PLAYLISTS = "playlists";
+
     private static final String TABLE_HISTORY = "playback_history";
     private static final String KEY_TIMESTAMP = "timestamp";
     private static final String KEY_DURATION = "duration";
@@ -55,6 +59,30 @@ public class OfflineDB extends SQLiteOpenHelper {
         db.execSQL(CREATE_HISTORY_TABLE);
     }
 
+    private void ensurePlaylistsTable(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS " + TABLE_PLAYLISTS + " (" + KEY_NAME + " TEXT PRIMARY KEY)");
+    }
+
+    /** Crea una playlist buida. Retorna false si el nom ja existeix (sense distingir majúscules) o hi ha error. */
+    public boolean createEmptyPlaylist(String name) {
+        if (name == null) return false;
+        name = name.trim();
+        if (name.isEmpty()) return false;
+        for (MusicItem p : getOfflinePlaylists()) {
+            if (p.getName().equalsIgnoreCase(name)) return false;
+        }
+        try {
+            SQLiteDatabase db = this.getWritableDatabase();
+            ensurePlaylistsTable(db);
+            ContentValues values = new ContentValues();
+            values.put(KEY_NAME, name);
+            return db.insert(TABLE_PLAYLISTS, null, values) != -1;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
     public void removeLocalSong(String songPath, String playlistName) {
         android.database.sqlite.SQLiteDatabase db = this.getWritableDatabase();
         db.delete(TABLE_SONGS, KEY_SERVER_PATH + " = ? AND " + KEY_PLAYLIST + " = ?", new String[]{songPath, playlistName});
@@ -82,20 +110,35 @@ public class OfflineDB extends SQLiteOpenHelper {
     }
 
     public List<MusicItem> getOfflinePlaylists() {
-        List<MusicItem> playlists = new ArrayList<>();
-        String selectQuery = "SELECT DISTINCT " + KEY_PLAYLIST + " FROM " + TABLE_SONGS;
-        SQLiteDatabase db = this.getReadableDatabase();
+        java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
+        SQLiteDatabase db = this.getWritableDatabase();
         try {
-            Cursor cursor = db.rawQuery(selectQuery, null);
+            Cursor cursor = db.rawQuery("SELECT DISTINCT " + KEY_PLAYLIST + " FROM " + TABLE_SONGS, null);
             if (cursor.moveToFirst()) {
                 do {
                     String plName = cursor.getString(0);
-                    MusicItem pl = new MusicItem(plName, "folder", plName, "");
-                    playlists.add(pl);
+                    if (plName != null) names.add(plName);
                 } while (cursor.moveToNext());
             }
             cursor.close();
         } catch (Exception e) { e.printStackTrace(); }
+
+        try {
+            ensurePlaylistsTable(db);
+            Cursor cursor = db.rawQuery("SELECT " + KEY_NAME + " FROM " + TABLE_PLAYLISTS, null);
+            if (cursor.moveToFirst()) {
+                do {
+                    String plName = cursor.getString(0);
+                    if (plName != null) names.add(plName);
+                } while (cursor.moveToNext());
+            }
+            cursor.close();
+        } catch (Exception e) { e.printStackTrace(); }
+
+        List<MusicItem> playlists = new ArrayList<>();
+        for (String plName : names) {
+            playlists.add(new MusicItem(plName, "folder", plName, ""));
+        }
         return playlists;
     }
 
@@ -157,6 +200,8 @@ public class OfflineDB extends SQLiteOpenHelper {
         try {
             SQLiteDatabase db = this.getWritableDatabase();
             db.delete(TABLE_SONGS, KEY_PLAYLIST + " = ?", new String[]{playlistName});
+            ensurePlaylistsTable(db);
+            db.delete(TABLE_PLAYLISTS, KEY_NAME + " = ?", new String[]{playlistName});
             db.close();
         } catch (Exception e) { e.printStackTrace(); }
     }

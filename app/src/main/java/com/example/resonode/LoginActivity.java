@@ -41,6 +41,8 @@ public class LoginActivity extends AppCompatActivity {
     private Button btnAction;
     private ProgressBar progressBar;
     private SessionManager session;
+    private Button btnLocalMode;
+
 
     private OkHttpClient createClient() {
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
@@ -89,15 +91,37 @@ public class LoginActivity extends AppCompatActivity {
         etInvitationCode = findViewById(R.id.et_invitation_code);
         btnAction = findViewById(R.id.btn_login_register);
         progressBar = findViewById(R.id.progress_bar);
+        btnLocalMode = findViewById(R.id.btn_local_mode);
+        btnLocalMode.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                goToMainActivityLocalMode();
+            }
+        });
 
-        if (session.hasInvitationCode() && etInvitationCode != null) {
-            etInvitationCode.setText(session.getInvitationCode());
+        // Si ja hi havia un codi (de la sessió o guardat d'abans), el posem a la caixa
+        if (session.hasInvitationCode()) {
+            AppPrefs.saveInvitationCode(this, session.getInvitationCode());
+        }
+        String savedCode = session.hasInvitationCode() ? session.getInvitationCode() : AppPrefs.getInvitationCode(this);
+        if (etInvitationCode != null && savedCode != null && !savedCode.isEmpty()) {
+            etInvitationCode.setText(savedCode);
         }
 
         btnAction.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { handleAuth(); }
         });
     }
+
+    private void goToMainActivityLocalMode() {
+        AppPrefs.setLocalMode(this, true);
+        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+        intent.putExtra("LOCAL_MODE", true);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
+    }
+
 
     private void handleAuth() {
         final String username = etUsername.getText().toString().trim();
@@ -125,6 +149,7 @@ public class LoginActivity extends AppCompatActivity {
             public void onUrlFound(final String url) {
                 Config.SERVER_URL = url;
                 session.saveInvitationCode(finalCode);
+                AppPrefs.saveInvitationCode(LoginActivity.this, finalCode);
 
                 proceedWithServerAuth(username, password);
             }
@@ -212,6 +237,7 @@ public class LoginActivity extends AppCompatActivity {
         mainHandler.post(new Runnable() {
             @Override
             public void run() {
+                AppPrefs.setLocalMode(LoginActivity.this, false);
                 session.createLoginSession(username);
                 goToMainActivity();
             }

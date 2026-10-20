@@ -37,6 +37,18 @@ public class SplashActivity extends AppCompatActivity {
 
         final SessionManager session = new SessionManager(this);
 
+        // Guardem el codi d'invitació a part (també per a qui ja havia iniciat sessió abans)
+        if (session.hasInvitationCode()) {
+            AppPrefs.saveInvitationCode(this, session.getInvitationCode());
+        }
+
+        // Mode local: entra directe, sense tocar el servidor
+        if (AppPrefs.isLocalMode(this)) {
+            if (statusText != null) statusText.setText(getString(R.string.status_starting_offline));
+            new Handler(Looper.getMainLooper()).postDelayed(() -> navigateToNextScreen(session), 800);
+            return;
+        }
+
         if (!NetworkReceiver.isConnected(this)) {
             if (statusText != null) statusText.setText(getString(R.string.status_starting_offline));
             new Handler().postDelayed(() -> navigateToNextScreen(session), 800);
@@ -86,7 +98,10 @@ public class SplashActivity extends AppCompatActivity {
     private void navigateToNextScreen(SessionManager session) {
         runOnUiThread(() -> {
             Intent intent;
-            if (session.isLoggedIn() && session.hasInvitationCode()) {
+            if (AppPrefs.isLocalMode(SplashActivity.this)) {
+                intent = new Intent(SplashActivity.this, MainActivity.class);
+                intent.putExtra("LOCAL_MODE", true);
+            } else if (session.isLoggedIn() && session.hasInvitationCode()) {
                 intent = new Intent(SplashActivity.this, MainActivity.class);
             } else {
                 intent = new Intent(SplashActivity.this, LoginActivity.class);

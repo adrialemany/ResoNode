@@ -1,6 +1,5 @@
 package com.example.resonode;
 
-import androidx.annotation.Nullable;
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.ComponentName;
@@ -23,7 +22,6 @@ import android.view.View;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -46,7 +44,6 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
-import com.bumptech.glide.signature.ObjectKey;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.navigation.NavigationView;
 
@@ -58,7 +55,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -125,6 +121,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private boolean isBound = false;
     private boolean isRetryingConnection = false;
     private boolean isConfirmedOffline = false;
+    private boolean isLocalMode = false;
     private boolean isShuffle = false;
     private boolean needsUrlRefresh = false;
     private Handler seekBarHandler = new Handler();
@@ -215,6 +212,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     );
 
     private void showPlaylistSelectorForMultipleLocalSongs(final List<Uri> audioUris) {
+        if (isOfflineMode()) { showOfflinePlaylistSelectorForLocalSongs(audioUris); return; }
         executor.execute(() -> {
             try {
                 Response r = client.newCall(new Request.Builder().url(Config.SERVER_URL + "/browse?username=" + session.getUsername() + "&folder=").build()).execute();
@@ -376,6 +374,31 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        isLocalMode = getIntent().getBooleanExtra("LOCAL_MODE", false);
+
+        if (isLocalMode) {
+            session = new SessionManager(this);
+            if (!session.isLoggedIn()) session.createLoginSession("LocalUser");
+
+            setContentView(R.layout.activity_main);
+            setupUI();
+            setupPlayer();
+            applyPureBlackTheme();
+            updatePlayerIcons();
+
+            Intent intent = new Intent(this, MusicService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent);
+            } else {
+                startService(intent);
+            }
+            bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+
+            offlineDB = new OfflineDB(this);
+            loadOfflineContent("");
+            return;
+        }
+
         new File(getFilesDir(), "resonode_logs.txt").delete();
 
         try {
@@ -456,7 +479,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void fetchMusicContent(final String baseUrl, final String folderPath) {
-        if (isConfirmedOffline || !NetworkReceiver.isConnected(this)) {
+        if (isLocalMode || isConfirmedOffline || !NetworkReceiver.isConnected(this)) {
             loadOfflineContent(folderPath);
             return;
         }
@@ -657,8 +680,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 musicList.addAll(offlineItems);
 
                 if (getSupportActionBar() != null) getSupportActionBar().setTitle(displayTitle);
-                fabAdd.hide();
-                tvStatus.setText(getString(R.string.status_offline_mode));
+                if (folderPath.isEmpty()) fabAdd.show(); else fabAdd.hide();
+                if (btnSearch != null) btnSearch.setVisibility(View.GONE);
+                tvStatus.setText(isLocalMode
+                        ? "Modo Local: Solo música guardada en este dispositivo"
+                        : getString(R.string.status_offline_mode));
                 tvStatus.setVisibility(View.VISIBLE);
 
                 if (adapter != null) adapter.setCurrentPath(currentPath);
@@ -680,7 +706,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         tvTitle.setText(title.toUpperCase());
         if (btnSearch != null) {
-            btnSearch.setVisibility(path.isEmpty() ? View.VISIBLE : View.GONE);
+            btnSearch.setVisibility(path.isEmpty() && !isOfflineMode() ? View.VISIBLE : View.GONE);
         }
         if (fabAdd != null) {
             if (path.isEmpty()) {
@@ -855,6 +881,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         swipeRefresh.setColorSchemeColors(0xFF1DB954);
         swipeRefresh.setOnRefreshListener(() -> {
+            if (isLocalMode) {
+                swipeRefresh.setRefreshing(false);
+                loadOfflineContent(currentPath);
+                return;
+            }
             try { Glide.get(MainActivity.this).clearMemory(); } catch (Exception e) {}
             try { client.connectionPool().evictAll(); } catch (Exception e) {}
 
@@ -949,7 +980,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             } else {
                 tvToolbarAction.setVisibility(View.GONE);
                 btnBulkMore.setVisibility(View.GONE);
-                btnSearch.setVisibility(currentPath.isEmpty() && !isSharedPreview ? View.VISIBLE : View.GONE);
+                btnSearch.setVisibility(currentPath.isEmpty() && !isSharedPreview && !isOfflineMode() ? View.VISIBLE : View.GONE);
                 if (currentPath.isEmpty() && !isSharedPreview) fabAdd.show();
             }
         });
@@ -1364,6 +1395,22 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void handleFabClick() {
+        if (isOfflineMode()) {
+            String[] offlineOpts = {getString(R.string.menu_create_playlist), getString(R.string.menu_add_local_song)};
+            new AlertDialog.Builder(this).setItems(offlineOpts, (d, w) -> {
+                if (w == 0) {
+                    showCreatePlaylistDialog();
+                } else {
+                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("audio/*");
+                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                    pickLocalSongLauncher.launch(intent);
+                }
+            }).show();
+            return;
+        }
+
         String[] opts = {getString(R.string.menu_create_playlist), getString(R.string.menu_add_from_public_playlist), getString(R.string.menu_search_vault), getString(R.string.menu_add_local_song)};
         new AlertDialog.Builder(this).setItems(opts, new DialogInterface.OnClickListener() {
             @Override
@@ -1414,6 +1461,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void logoutUser() {
+        AppPrefs.setLocalMode(this, false);
         session.logoutUser();
         startActivity(new Intent(this, LoginActivity.class));
         overridePendingTransition(R.anim.fade_in_activity, R.anim.fade_out_activity);
@@ -1519,6 +1567,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 .setView(i)
                 .setPositiveButton(getString(R.string.btn_ok), new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface d, int w) {
+                        if (isOfflineMode()) { createOfflinePlaylist(i.getText().toString()); return; }
                         JSONObject j=new JSONObject();
                         try{
                             j.put("username",session.getUsername());
@@ -1532,6 +1581,47 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                             }
                         });
                     }
+                }).show();
+    }
+
+    private boolean isOfflineMode() {
+        return isLocalMode || isConfirmedOffline || !NetworkReceiver.isConnected(this);
+    }
+
+    private void createOfflinePlaylist(String rawName) {
+        String name = rawName == null ? "" : rawName.replaceAll("[\\\\/]", " ").trim();
+        if (name.isEmpty()) {
+            Toast.makeText(this, "Escribe un nombre para la playlist", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (offlineDB == null) offlineDB = new OfflineDB(this);
+        if (offlineDB.createEmptyPlaylist(name)) {
+            Toast.makeText(this, "Playlist creada: " + name, Toast.LENGTH_SHORT).show();
+            loadOfflineContent("");
+        } else {
+            Toast.makeText(this, "Ya existe una playlist con ese nombre", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void showOfflinePlaylistSelectorForLocalSongs(final List<Uri> audioUris) {
+        if (offlineDB == null) offlineDB = new OfflineDB(this);
+        final List<String> pList = new ArrayList<>();
+        for (MusicItem p : offlineDB.getOfflinePlaylists()) pList.add(p.getName());
+
+        if (pList.isEmpty()) {
+            Toast.makeText(this, getString(R.string.msg_create_playlist_first), Toast.LENGTH_LONG).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.title_add_songs_count, audioUris.size()))
+                .setItems(pList.toArray(new String[0]), (d, w) -> {
+                    String selectedPlaylist = pList.get(w);
+                    for (Uri uri : audioUris) {
+                        String[] meta = getAudioMetadata(uri);
+                        offlineDB.saveSong(uri.toString(), meta[0], selectedPlaylist, uri.toString(), meta[1]);
+                    }
+                    Toast.makeText(this, getString(R.string.toast_songs_added_count, audioUris.size(), selectedPlaylist), Toast.LENGTH_SHORT).show();
+                    loadOfflineContent(currentPath);
                 }).show();
     }
 
@@ -1927,6 +2017,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void handleNetworkChange(boolean isConnected) {
+        if (isLocalMode) return;
         if (lastKnownConnectionState != null && lastKnownConnectionState == isConnected && !isConfirmedOffline && !needsUrlRefresh) {
             return;
         }
