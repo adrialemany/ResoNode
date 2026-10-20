@@ -31,6 +31,7 @@ except ImportError:
     ADMIN_SECRET_KEY = "admin_default"
     SERVER_PORT = 5000
 
+
 app = FastAPI()
 
 @app.on_event("startup")
@@ -88,7 +89,7 @@ def save_shares(shares):
 @app.middleware("http")
 async def verify_secret_key(request: Request, call_next):
     # Public routes
-    allowed_paths = ["/", "/update/check", "/cover", "/share/link", "/share/resolve"]
+    allowed_paths = ["/", "/update/check", "/cover", "/share/link", "/share/resolve", "/stream"]
     
     if request.url.path in allowed_paths:
         return await call_next(request)
@@ -96,7 +97,7 @@ async def verify_secret_key(request: Request, call_next):
     # Key verification
     client_key = request.headers.get("x-secret-key")
     if client_key != API_SECRET_KEY:
-        return JSONResponse(status_code=403, content={"error": "⛔ Access Denied: Incorrect Key"})
+        return JSONResponse(status_code=403, content={"error": "⛔ Acceso Denegado: Clave Incorrecta"})
     
     response = await call_next(request)
     return response
@@ -128,10 +129,10 @@ def get_next_prefix(folder_path):
 def organize_file(temp_path):
     try:
         audio = EasyID3(temp_path)
-        artist = audio.get('artist', ['Unknown'])[0].replace("/", "-")
-        album = audio.get('album', ['Singles'])[0].replace("/", "-")
+        artist = audio.get('artist', ['Desconocido'])[0].replace("/", "-")
+        album = audio.get('album', ['Sencillos'])[0].replace("/", "-")
         
-        # Prioritize the filename cleaned by the client
+        # 🚀 IMPROVEMENT: Prioritize the filename cleaned by the client
         base_name = os.path.basename(temp_path)
         match = re.match(r"^(\d+)\s*-\s*(.*)\.mp3$", base_name, re.IGNORECASE)
         
@@ -219,25 +220,25 @@ def register(username: str = Form(...), password: str = Form(...)):
     # 1. Clean name
     safe_user = secure_path(username)
     if not safe_user or not password:
-        return JSONResponse({"error": "Missing data"}, 400)
+        return JSONResponse({"error": "Faltan datos"}, 400)
 
     # 2. 🔥 SECURITY: Verify that the user's folder ALREADY EXISTS 🔥
     # If there is no folder, we do not allow registering a password.
     user_music_path = os.path.join(BASE_DIR, safe_user)
     if not os.path.exists(user_music_path) or not os.path.isdir(user_music_path):
-        return JSONResponse({"error": "⛔ ACCESS DENIED: You do not have an assigned folder on the server."}, 403)
+        return JSONResponse({"error": "⛔ ACCESO DENEGADO: No tienes carpeta asignada en el servidor."}, 403)
 
     # 3. Check if a password is already assigned
     user_file = os.path.join(USERS_DB_PATH, f"{safe_user}.txt")
     if os.path.exists(user_file):
-        return JSONResponse({"error": "User is already registered"}, 409)
+        return JSONResponse({"error": "El usuario ya está registrado"}, 409)
 
     # 4. Save password
     try:
         with open(user_file, 'w') as f:
             f.write(password)
             
-        return {"message": "Registration successful"}
+        return {"message": "Registro completado con éxito"}
     except Exception as e:
         return JSONResponse({"error": str(e)}, 500)
 
@@ -248,7 +249,7 @@ def login(username: str = Form(...), password: str = Form(...), device_model: Op
     
     # If password file does not exist, user is not registered
     if not os.path.exists(user_file):
-        return JSONResponse({"error": "User not registered"}, 404)
+        return JSONResponse({"error": "Usuario no registrado"}, 404)
 
     try:
         # Read all lines
@@ -256,7 +257,7 @@ def login(username: str = Form(...), password: str = Form(...), device_model: Op
             lines = f.read().splitlines()
         
         if not lines:
-            return JSONResponse({"error": "Corrupted file"}, 500)
+            return JSONResponse({"error": "Archivo corrupto"}, 500)
 
         # The 1st line is ALWAYS the password
         stored_password = lines[0].strip()
@@ -272,9 +273,9 @@ def login(username: str = Form(...), password: str = Form(...), device_model: Op
                     with open(user_file, "a") as f:
                         f.write(f"\n{device_entry}")
                         
-            return {"message": "Login successful"}
+            return {"message": "Login correcto"}
         else:
-            return JSONResponse({"error": "Incorrect password"}, 401)
+            return JSONResponse({"error": "Contraseña incorrecta"}, 401)
     except Exception as e:
         return JSONResponse({"error": str(e)}, 500)
 
@@ -310,7 +311,7 @@ def get_root_folders():
 async def upload_zip(request: Request, file: UploadFile = File(...), target_playlist: str = Form(...)):
     admin_key = request.headers.get("x-admin-key")
     if admin_key != ADMIN_SECRET_KEY:
-        return JSONResponse(status_code=403, content={"error": "Only the admin can upload new music."})
+        return JSONResponse(status_code=403, content={"error": "Sols l'administrador pot pujar música nova."})
     temp_zip = "temp.zip"; temp_extract = "temp_extract"
 
     with open(temp_zip, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
@@ -355,7 +356,7 @@ def search_vault(data: SearchQuery):
         if not os.path.isdir(artist_path): continue
         
         if query in artist.lower():
-            results.append({"type": "artist", "title": artist, "artist": "Artist", "path_id": artist})
+            results.append({"type": "artist", "title": artist, "artist": "Artista", "path_id": artist})
 
         for album in os.listdir(artist_path):
             album_path = os.path.join(artist_path, album)
@@ -410,7 +411,7 @@ def add_from_vault(data: AddFromVault):
 def browse(username: str, folder: str = ""):
     safe_user = secure_path(username)
     folder = folder.replace("\\", "/") 
-    if ".." in folder: return JSONResponse({"error": "Invalid path"}, 403)
+    if ".." in folder: return JSONResponse({"error": "Ruta inválida"}, 403)
     
     is_vault = False
     target = ""
@@ -428,7 +429,7 @@ def browse(username: str, folder: str = ""):
             target = vault_target
             is_vault = True
         else:
-            return JSONResponse({"error": "Does not exist"}, 404)
+            return JSONResponse({"error": "No existe"}, 404)
     
     items = []
     try:
@@ -441,7 +442,7 @@ def browse(username: str, folder: str = ""):
                 items.append({"name": name, "type": "folder", "path": path_rel, "artist": ""})
             
             elif name.lower().endswith(".mp3"):
-                detected_artist = "ResoNode"
+                detected_artist = "SpotiFly"
                 try:
                     real_path = os.path.realpath(full_path)
                     if "MusicVault" in real_path:
@@ -462,7 +463,7 @@ def browse(username: str, folder: str = ""):
 def create_pl(data: PlaylistCreate):
     safe_user = secure_path(data.username); safe_pl = secure_path(data.playlist_name)
     path = os.path.join(BASE_DIR, safe_user, safe_pl)
-    if os.path.exists(path): return {"error": "Already exists"}
+    if os.path.exists(path): return {"error": "Ya existe"}
     os.makedirs(path); return {"success": True}
 
 @app.post("/playlist/add")
@@ -497,7 +498,7 @@ def add_s(data: AddSongs):
 # --- 🔥 HERE WE APPLY THE STREAMING CHUNKS IMPROVEMENT 🔥 ---
 @app.get("/stream")
 def stream(request: Request, username: str, path: str):
-    if ".." in path: return JSONResponse({"error": "Hack detected"}, 403)
+    if "../" in path: return JSONResponse({"error": "Hack detected"}, 403)
     safe_user = secure_path(username)
     
     p_general = os.path.join(BASE_DIR, path)
@@ -578,16 +579,16 @@ def delete_item(data: DeleteItem):
     if ".." in data.path: return {"error": "Hack detected"}
     blacklist = ["MusicVault", "General", "updates", "users_db", "__pycache__"]
     if safe_user in blacklist:
-        return {"error": "Hack Detected: You do not have permission to touch system folders."}
+        return {"error": "Hack Detected: No tens permís per a tocar carpetes del sistema."}
 
     target = os.path.join(BASE_DIR, safe_user, data.path)
 
-    if "General" in data.path and ".." in data.path: return {"error": "Not allowed"}
+    if "General" in data.path and ".." in data.path: return {"error": "No permitido"}
 
     try:
         if os.path.isdir(target): shutil.rmtree(target)
         elif os.path.isfile(target): os.remove(target)
-        else: return {"error": "Not found"}
+        else: return {"error": "No encontrado"}
         return {"success": True}
     except Exception as e: return {"error": str(e)}
 
@@ -615,7 +616,7 @@ def download_update():
 async def upload_update_remoto(request: Request, apk_file: UploadFile = File(...), json_file: UploadFile = File(...)):
     admin_key = request.headers.get("x-admin-key")
     if admin_key != ADMIN_SECRET_KEY:
-        return JSONResponse(status_code=403, content={"error": "Hack Detected: Only the administrator can upload APKs."})
+        return JSONResponse(status_code=403, content={"error": "Hack Detected: Només l'administrador pot pujar APKs."})
     try:
         if os.path.exists(UPDATE_DIR):
             for f in os.listdir(UPDATE_DIR): os.remove(os.path.join(UPDATE_DIR, f))
@@ -624,13 +625,13 @@ async def upload_update_remoto(request: Request, apk_file: UploadFile = File(...
         with open(apk_path, "wb") as buffer: shutil.copyfileobj(apk_file.file, buffer)
         json_path = os.path.join(UPDATE_DIR, "version.json")
         with open(json_path, "wb") as buffer: shutil.copyfileobj(json_file.file, buffer)
-        return {"status": "ok", "msg": "Update deployed successfully"}
+        return {"status": "ok", "msg": "Update desplegado correctamente"}
     except Exception as e: return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/cover")
 def get_cover(username: str, path: str):
     path = unquote(path).lstrip('/')
-    if ".." in path: return JSONResponse({"error": "Hack detected"}, 403)
+    if "../" in path: return JSONResponse({"error": "Hack detected"}, 403)
     safe_user = secure_path(username)
     if path.startswith("General"): target = os.path.join(BASE_DIR, path)
     elif os.path.exists(os.path.join(BASE_DIR, safe_user, path)): target = os.path.join(BASE_DIR, safe_user, path)
@@ -665,10 +666,10 @@ async def upload_playlist_cover(file: UploadFile = File(...), username: str = Fo
     safe_user = secure_path(username)
     if playlist_path.startswith("General"): dest_dir = os.path.join(BASE_DIR, playlist_path)
     else: dest_dir = os.path.join(BASE_DIR, safe_user, playlist_path)
-    if not os.path.exists(dest_dir): return JSONResponse({"error": "Playlist does not exist"}, 404)
+    if not os.path.exists(dest_dir): return JSONResponse({"error": "Playlist no existe"}, 404)
     save_path = os.path.join(dest_dir, "cover.jpg")
     with open(save_path, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
-    return {"status": "ok", "msg": "Cover updated"}
+    return {"status": "ok", "msg": "Portada actualizada"}
 
 @app.post("/auth/get_devices")
 def get_devices(username: str = Form(...)):
@@ -860,7 +861,7 @@ def get_vault_artists():
         if not os.path.exists(VAULT_DIR): return {"results": []}
         artists = [d for d in os.listdir(VAULT_DIR) if os.path.isdir(os.path.join(VAULT_DIR, d))]
         artists.sort(key=lambda s: s.lower())
-        results = [{"type": "artist", "title": a, "artist": "Artist", "path_id": a} for a in artists]
+        results = [{"type": "artist", "title": a, "artist": "Artista", "path_id": a} for a in artists]
         return {"results": results}
     except Exception as e: return JSONResponse({"error": str(e)}, 500)
 
@@ -874,7 +875,7 @@ def create_share(data: ShareCreate):
         source_path = os.path.join(BASE_DIR, safe_user, data.path)
         
     if not os.path.exists(source_path):
-        return JSONResponse({"error": "Playlist not found"}, 404)
+        return JSONResponse({"error": "Playlist no trobada"}, 404)
 
     token = str(uuid.uuid4())
     shares = load_shares()
@@ -888,7 +889,7 @@ def create_share(data: ShareCreate):
 def import_share(data: ShareImport):
     shares = load_shares()
     if data.token not in shares:
-        return JSONResponse({"error": "Invalid or expired link"}, 404)
+        return JSONResponse({"error": "Enllaç invàlid o caducat"}, 404)
 
     share_info = shares[data.token]
     owner = share_info["owner"]
@@ -901,7 +902,7 @@ def import_share(data: ShareImport):
         src_dir = os.path.join(BASE_DIR, owner, original_path)
 
     if not os.path.exists(src_dir):
-        return JSONResponse({"error": "Original playlist no longer exists"}, 404)
+        return JSONResponse({"error": "La playlist original ja no existeix"}, 404)
 
     # Create folder for the new user
     playlist_name = os.path.basename(original_path)
@@ -910,7 +911,7 @@ def import_share(data: ShareImport):
     # If one with that name already exists, add a number
     counter = 1
     while os.path.exists(dest_dir):
-        dest_dir = os.path.join(BASE_DIR, safe_new_user, f"{playlist_name} (Shared {counter})")
+        dest_dir = os.path.join(BASE_DIR, safe_new_user, f"{playlist_name} (Compartida {counter})")
         counter += 1
 
     os.makedirs(dest_dir)
@@ -936,7 +937,7 @@ def import_share(data: ShareImport):
 def share_redirect(request: Request, token: str):
     shares = load_shares()
     if token not in shares:
-        return HTMLResponse(content="<h1>Invalid or expired link</h1>", status_code=404)
+        return HTMLResponse(content="<h1>Enllaç invàlid o caducat</h1>", status_code=404)
 
     share_info = shares[token]
     owner = share_info["owner"]
@@ -945,7 +946,7 @@ def share_redirect(request: Request, token: str):
     # Extract the name of the playlist or song (e.g.: "Rock Classics")
     item_name = os.path.basename(path)
     if not item_name:
-        item_name = "Shared Playlist"
+        item_name = "Playlist Compartida"
 
     # Build the base public URL (detecting Cloudflare or proxies)
     scheme = request.headers.get("x-forwarded-proto", "http")
@@ -960,7 +961,7 @@ def share_redirect(request: Request, token: str):
     # Generate the web with meta-tags for Telegram/WhatsApp
     html_content = f"""
     <!DOCTYPE html>
-    <html lang="en">
+    <html lang="ca">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -968,7 +969,7 @@ def share_redirect(request: Request, token: str):
 
         <!-- Open Graph tags for Telegram, WhatsApp, Discord... -->
         <meta property="og:title" content="{item_name}">
-        <meta property="og:description" content="This playlist has been shared with you. Click to open it in ResoNode!">
+        <meta property="og:description" content="T'han compartit esta llista de reproducció. Fes clic per obrir-la a ResoNode!">
         <meta property="og:image" content="{cover_url}">
         <meta property="og:url" content="{share_url}">
         <meta property="og:type" content="music.playlist">
@@ -976,7 +977,7 @@ def share_redirect(request: Request, token: str):
         <!-- Tags for Twitter/X -->
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:title" content="{item_name}">
-        <meta name="twitter:description" content="Open in ResoNode!">
+        <meta name="twitter:description" content="Obre-ho a ResoNode!">
         <meta name="twitter:image" content="{cover_url}">
 
         <!-- Automatic redirection to the Android App -->
@@ -989,8 +990,8 @@ def share_redirect(request: Request, token: str):
     </head>
     <body style="background-color: #121212; color: #1DB954; font-family: Arial, sans-serif; text-align: center; padding-top: 20%;">
         <h1>ResoNode</h1>
-        <h2 style="color: white;">Opening "{item_name}"...</h2>
-        <p style="color: gray;">If the app doesn't open automatically, make sure you have it installed.</p>
+        <h2 style="color: white;">Obrint "{item_name}"...</h2>
+        <p style="color: gray;">Si l'aplicació no s'obri automàticament, comprova que la tens instal·lada.</p>
     </body>
     </html>
     """
@@ -1000,7 +1001,7 @@ def share_redirect(request: Request, token: str):
 @app.get("/share/resolve")
 def share_resolve(token: str):
     shares = load_shares()
-    if token not in shares: return JSONResponse({"error": "Invalid link"}, 404)
+    if token not in shares: return JSONResponse({"error": "Enllaç invàlid"}, 404)
     info = shares[token]
     owner = info["owner"]
     path = info["path"]
@@ -1013,11 +1014,11 @@ def share_resolve(token: str):
     is_file = os.path.isfile(full_path)
     
     # Extract the artist if it's a single song
-    artist = "Unknown"
+    artist = "Desconegut"
     if is_file and path.lower().endswith(".mp3"):
         try:
             audio = EasyID3(full_path)
-            artist = audio.get('artist', ['Unknown'])[0]
+            artist = audio.get('artist', ['Desconegut'])[0]
         except: pass
         
     return {
@@ -1037,7 +1038,7 @@ class ShareImportItems(BaseModel):
 @app.post("/share/import_items")
 def share_import_items(data: ShareImportItems):
     shares = load_shares()
-    if data.token not in shares: return JSONResponse({"error": "Invalid link"}, 404)
+    if data.token not in shares: return JSONResponse({"error": "Enllaç invàlid"}, 404)
     info = shares[data.token]
     owner = info["owner"]
     src_path = info["path"]
@@ -1084,12 +1085,12 @@ def get_anime_server():
                 url = f.read().strip()
                 if url:
                     return {"url": url}
-        return JSONResponse({"error": "Anime URL not found"}, 404)
+        return JSONResponse({"error": "No s'ha trobat la URL de l'anime"}, 404)
     except Exception as e:
         return JSONResponse({"error": str(e)}, 500)
 
 if __name__ == "__main__":
     import uvicorn
     # 🔥 LISTEN ON ALL IPS 🔥
-    print(f"🔥 INITIATING SERVER ON PORT {SERVER_PORT} 🔥")
+    print(f"🔥 INICIANDO SERVIDOR EN PUERTO {SERVER_PORT} 🔥")
     uvicorn.run(app, host="0.0.0.0", port=SERVER_PORT)
