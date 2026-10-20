@@ -37,12 +37,10 @@ public class SplashActivity extends AppCompatActivity {
 
         final SessionManager session = new SessionManager(this);
 
-        // Guardem el codi d'invitació a part (també per a qui ja havia iniciat sessió abans)
         if (session.hasInvitationCode()) {
             AppPrefs.saveInvitationCode(this, session.getInvitationCode());
         }
 
-        // Mode local: entra directe, sense tocar el servidor
         if (AppPrefs.isLocalMode(this)) {
             if (statusText != null) statusText.setText(getString(R.string.status_starting_offline));
             new Handler(Looper.getMainLooper()).postDelayed(() -> navigateToNextScreen(session), 800);

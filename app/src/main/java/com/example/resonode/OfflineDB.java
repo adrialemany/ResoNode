@@ -25,8 +25,6 @@ public class OfflineDB extends SQLiteOpenHelper {
     private static final String KEY_FILE_PATH = "file_path";
     private static final String KEY_ARTIST = "artist";
 
-    // Playlists creades sense connexió (poden estar buides). Es crea "lazy" per no pujar DATABASE_VERSION:
-    // onUpgrade esborra les taules de cançons i historial.
     private static final String TABLE_PLAYLISTS = "playlists";
 
     private static final String TABLE_HISTORY = "playback_history";

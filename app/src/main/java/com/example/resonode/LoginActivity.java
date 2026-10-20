@@ -99,7 +99,6 @@ public class LoginActivity extends AppCompatActivity {
             }
         });
 
-        // Si ja hi havia un codi (de la sessió o guardat d'abans), el posem a la caixa
         if (session.hasInvitationCode()) {
             AppPrefs.saveInvitationCode(this, session.getInvitationCode());
         }

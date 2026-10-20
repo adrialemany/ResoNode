@@ -683,7 +683,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 if (folderPath.isEmpty()) fabAdd.show(); else fabAdd.hide();
                 if (btnSearch != null) btnSearch.setVisibility(View.GONE);
                 tvStatus.setText(isLocalMode
-                        ? "Modo Local: Solo música guardada en este dispositivo"
+                        ? getString(R.string.status_local_mode)
                         : getString(R.string.status_offline_mode));
                 tvStatus.setVisibility(View.VISIBLE);
 
@@ -890,14 +890,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             try { client.connectionPool().evictAll(); } catch (Exception e) {}
 
             if (!NetworkReceiver.isConnected(MainActivity.this)) {
-                Toast.makeText(MainActivity.this, "Revisa la connexió a Internet", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, getString(R.string.toast_check_internet), Toast.LENGTH_SHORT).show();
                 swipeRefresh.setRefreshing(false);
                 loadOfflineContent(currentPath);
                 return;
             }
 
             if (session.hasInvitationCode()) {
-                tvStatus.setText("Sincronitzant servidor...");
+                tvStatus.setText(getString(R.string.status_syncing_server));
                 tvStatus.setVisibility(View.VISIBLE);
                 UrlFetcher.fetchLatestUrl(session.getInvitationCode(), new UrlFetcher.UrlCallback() {
                     @Override
@@ -919,7 +919,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         runOnUiThread(() -> {
                             isConfirmedOffline = true;
                             loadOfflineContent(currentPath);
-                            tvStatus.setText("Mode Sense Connexió");
+                            tvStatus.setText(getString(R.string.status_offline_mode));
                             tvStatus.setVisibility(View.VISIBLE);
                             swipeRefresh.setRefreshing(false);
                         });
@@ -1591,15 +1591,15 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private void createOfflinePlaylist(String rawName) {
         String name = rawName == null ? "" : rawName.replaceAll("[\\\\/]", " ").trim();
         if (name.isEmpty()) {
-            Toast.makeText(this, "Escribe un nombre para la playlist", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_enter_playlist_name), Toast.LENGTH_SHORT).show();
             return;
         }
         if (offlineDB == null) offlineDB = new OfflineDB(this);
         if (offlineDB.createEmptyPlaylist(name)) {
-            Toast.makeText(this, "Playlist creada: " + name, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_playlist_created, name), Toast.LENGTH_SHORT).show();
             loadOfflineContent("");
         } else {
-            Toast.makeText(this, "Ya existe una playlist con ese nombre", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_playlist_exists), Toast.LENGTH_SHORT).show();
         }
     }
 

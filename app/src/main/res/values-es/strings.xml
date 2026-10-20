@@ -251,4 +251,14 @@
     <string name="menu_home">Inicio</string>
     <string name="menu_account">Cuenta</string>
     <string name="menu_logout">Cerrar Sesión</string>
+
+    <!-- Modo local / offline -->
+    <string name="status_local_mode">Modo Local: solo música guardada en este dispositivo</string>
+    <string name="toast_enter_playlist_name">Escribe un nombre para la playlist</string>
+    <string name="toast_playlist_created">Playlist creada: %1$s</string>
+    <string name="toast_playlist_exists">Ya existe una playlist con ese nombre</string>
+    <string name="toast_check_internet">Revisa la conexión a Internet</string>
+    <string name="status_syncing_server">Sincronizando servidor…</string>
+
+    <string name="btn_local_mode">Modo Local</string>
 </resources>

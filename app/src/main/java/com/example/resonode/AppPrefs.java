@@ -3,10 +3,6 @@ package com.example.resonode;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-/**
- * Preferències d'arrencada independents de SessionManager:
- * sobreviuen al tancament de sessió i no depenen de com la implemente.
- */
 public final class AppPrefs {
     private static final String FILE = "ResoNodeStartup";
     private static final String KEY_LOCAL_MODE = "local_mode";
