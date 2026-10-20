@@ -3,6 +3,8 @@ package com.example.resonode;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.View;
 import android.view.animation.AlphaAnimation;
@@ -10,7 +12,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 public class SplashActivity extends AppCompatActivity {
+
+    private static final long WATCHDOG_TIMEOUT_MS = 2000;
 
     @Override
     protected void attachBaseContext(Context newBase) {
@@ -33,14 +39,28 @@ public class SplashActivity extends AppCompatActivity {
 
         if (!NetworkReceiver.isConnected(this)) {
             if (statusText != null) statusText.setText(getString(R.string.status_starting_offline));
-            new android.os.Handler().postDelayed(() -> navigateToNextScreen(session), 800);
+            new Handler().postDelayed(() -> navigateToNextScreen(session), 800);
             return;
         }
 
         if (session.hasInvitationCode()) {
+            final Handler mainHandler = new Handler(Looper.getMainLooper());
+            final AtomicBoolean hasNavigated = new AtomicBoolean(false);
+
+            Runnable watchdog = () -> {
+                if (hasNavigated.compareAndSet(false, true)) {
+                    android.util.Log.w("SplashActivity", "Watchdog: UrlFetcher no ha respost a temps, forçant navegació");
+                    if (statusText != null) statusText.setText(getString(R.string.status_starting_offline));
+                    navigateToNextScreen(session);
+                }
+            };
+            mainHandler.postDelayed(watchdog, WATCHDOG_TIMEOUT_MS);
+
             UrlFetcher.fetchLatestUrl(session.getInvitationCode(), new UrlFetcher.UrlCallback() {
                 @Override
                 public void onUrlFound(String url) {
+                    if (!hasNavigated.compareAndSet(false, true)) return;
+                    mainHandler.removeCallbacks(watchdog);
                     runOnUiThread(() -> {
                         if (statusText != null) statusText.setText(getString(R.string.status_syncing));
                     });
@@ -50,6 +70,8 @@ public class SplashActivity extends AppCompatActivity {
 
                 @Override
                 public void onError(Exception e) {
+                    if (!hasNavigated.compareAndSet(false, true)) return;
+                    mainHandler.removeCallbacks(watchdog);
                     runOnUiThread(() -> {
                         if (statusText != null) statusText.setText(getString(R.string.status_starting_offline));
                     });
@@ -57,7 +79,7 @@ public class SplashActivity extends AppCompatActivity {
                 }
             });
         } else {
-            new android.os.Handler().postDelayed(() -> navigateToNextScreen(session), 1500);
+            new Handler().postDelayed(() -> navigateToNextScreen(session), 1500);
         }
     }
 

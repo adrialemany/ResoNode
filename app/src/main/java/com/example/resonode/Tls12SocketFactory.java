@@ -60,7 +60,6 @@ public class Tls12SocketFactory extends SSLSocketFactory {
                 sc.init(null, null, null);
                 client.sslSocketFactory(new Tls12SocketFactory(sc.getSocketFactory()), new CustomTrustManager());
             } catch (Exception exc) {
-                android.util.Log.e("OkHttpTLSCompat", "Error while setting TLS 1.2", exc);
             }
         }
         return client;

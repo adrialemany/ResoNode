@@ -24,12 +24,9 @@ public class MyApplication extends MultiDexApplication {
         Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread thread, Throwable e) {
-                Log.e("CRASH_REPORT", "------------------------------------------------");
-                Log.e("CRASH_REPORT", "🔥 ERROR FATAL DETECTAT 🔥");
-                Log.e("CRASH_REPORT", "Missatge: " + e.getMessage());
+
                 Log.getStackTraceString(e);
                 e.printStackTrace();
-                Log.e("CRASH_REPORT", "------------------------------------------------");
 
                 if (defaultHandler != null) {
                     defaultHandler.uncaughtException(thread, e);

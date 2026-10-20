@@ -18,10 +18,6 @@
                 android:title="@string/menu_settings"
                 android:icon="@android:drawable/ic_menu_preferences" />
             <item
-                android:id="@+id/nav_anime"
-                android:icon="@android:drawable/ic_menu_slideshow"
-                android:title="@string/menu_anime" />
-            <item
                 android:id="@+id/nav_logout"
                 android:title="@string/menu_logout"
                 android:icon="@android:drawable/ic_lock_power_off" />

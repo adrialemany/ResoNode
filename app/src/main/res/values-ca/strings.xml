@@ -137,10 +137,6 @@
     <string name="btn_ignore_forever">IGNORAR PER SEMPRE</string>
     <string name="btn_later">MÉS TARD</string>
 
-    <string name="toast_connecting_anime_server">Connectant amb el servidor d\'Anime...</string>
-    <string name="toast_url_copied_jellyfin">URL copiada! Apega-la al servidor de Jellyfin.</string>
-    <string name="toast_install_jellyfin_first">Instal·la Jellyfin primer</string>
-    <string name="toast_anime_url_not_found">No s\'ha trobat la URL de l\'Anime</string>
     <string name="error_connection_generic">Error de connexió</string>
 
     <string name="toast_generating_link">Generant enllaç...</string>
@@ -254,6 +250,5 @@
 
     <string name="menu_home">Inici</string>
     <string name="menu_account">Compte</string>
-    <string name="menu_anime">Servidor d\'Anime</string>
     <string name="menu_logout">Tancar Sessió</string>
 </resources>

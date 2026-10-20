@@ -137,10 +137,6 @@
     <string name="btn_ignore_forever">IGNORE FOREVER</string>
     <string name="btn_later">LATER</string>
 
-    <string name="toast_connecting_anime_server">Connecting to Anime server…</string>
-    <string name="toast_url_copied_jellyfin">URL copied! Paste it into the Jellyfin server.</string>
-    <string name="toast_install_jellyfin_first">Install Jellyfin first</string>
-    <string name="toast_anime_url_not_found">Anime URL not found</string>
     <string name="error_connection_generic">Connection error</string>
 
     <string name="toast_generating_link">Generating link…</string>
@@ -254,6 +250,5 @@
 
     <string name="menu_home">Home</string>
     <string name="menu_account">Account</string>
-    <string name="menu_anime">Anime Server</string>
     <string name="menu_logout">Log Out</string>
 </resources>

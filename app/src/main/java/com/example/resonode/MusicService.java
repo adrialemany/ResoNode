@@ -367,7 +367,6 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
                     if (localPath != null) {
                         urlToPlay = localPath;
                         isLocal = true;
-                        android.util.Log.d("MusicService", "Offline: Cambiando a archivo local -> " + localPath);
                     } else {
                         
                         Toast.makeText(getApplicationContext(), "No disponible offline", Toast.LENGTH_SHORT).show();
@@ -434,7 +433,6 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
                         if (!isLocalFile) {
                             String localPath = findLocalPath(originalItem);
                             if (localPath != null) {
-                                android.util.Log.d("MusicService", "Error Stream -> Fallback Local");
                                 requestAudioFocusAndPlay(localPath, originalItem, true);
                                 return true; 
                             }

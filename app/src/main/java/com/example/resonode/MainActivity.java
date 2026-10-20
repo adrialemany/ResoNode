@@ -1,4 +1,5 @@
 package com.example.resonode;
+
 import androidx.annotation.Nullable;
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
@@ -73,7 +74,6 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 
 import android.content.pm.PackageManager;
-import android.net.Uri;
 
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
 
@@ -124,6 +124,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private MusicService musicService;
     private boolean isBound = false;
     private boolean isRetryingConnection = false;
+    private boolean isConfirmedOffline = false;
     private boolean isShuffle = false;
     private boolean needsUrlRefresh = false;
     private Handler seekBarHandler = new Handler();
@@ -138,8 +139,21 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private OkHttpClient createClient() {
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
-                .connectTimeout(2, TimeUnit.SECONDS)
-                .readTimeout(2, TimeUnit.SECONDS)
+                .connectTimeout(6, TimeUnit.SECONDS)
+                .readTimeout(6, TimeUnit.SECONDS)
+                .retryOnConnectionFailure(true)
+                .dns(hostname -> {
+                    List<java.net.InetAddress> addresses = okhttp3.Dns.SYSTEM.lookup(hostname);
+                    List<java.net.InetAddress> ipv4First = new ArrayList<>();
+                    for (java.net.InetAddress addr : addresses) {
+                        if (addr instanceof java.net.Inet4Address) {
+                            ipv4First.add(0, addr);
+                        } else {
+                            ipv4First.add(addr);
+                        }
+                    }
+                    return ipv4First;
+                })
                 .addInterceptor(new Interceptor() {
                     @Override
                     public Response intercept(Chain chain) throws IOException {
@@ -362,6 +376,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        new File(getFilesDir(), "resonode_logs.txt").delete();
+
         try {
             File updateFile = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "update.apk");
             if (updateFile.exists()) {
@@ -390,7 +406,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         String model = android.os.Build.MODEL;
         String fullDeviceName = manufacturer.substring(0, 1).toUpperCase() + manufacturer.substring(1) + " " + model;
         session.saveDeviceModel(fullDeviceName);
-        android.util.Log.d("ResoNode", "Model guardat: " + fullDeviceName);
 
         setupUI();
         setupPlayer();
@@ -414,7 +429,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         offlineDB = new OfflineDB(this);
 
         checkAndRequestAppLinks();
-
+        SharedPreferences prefs = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE);
+        if (Config.SERVER_URL == null || Config.SERVER_URL.isEmpty()) {
+            Config.SERVER_URL = prefs.getString("last_server_url", "");
+        }
         checkForUpdates();
         fetchMusicContent(Config.SERVER_URL, "");
         pendingIntentToHandle = getIntent();
@@ -425,12 +443,23 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
     }
 
+    /**
+     * Builds a server URL safely using Uri.Builder instead of manual string
+     * concatenation + URLEncoder.encode(...).
+     */
+    private String buildServerUrl(String endpoint, String... queryParams) {
+        Uri.Builder builder = Uri.parse(Config.SERVER_URL + endpoint).buildUpon();
+        for (int i = 0; i + 1 < queryParams.length; i += 2) {
+            builder.appendQueryParameter(queryParams[i], queryParams[i + 1]);
+        }
+        return builder.build().toString();
+    }
+
     private void fetchMusicContent(final String baseUrl, final String folderPath) {
-        if (!NetworkReceiver.isConnected(this)) {
+        if (isConfirmedOffline || !NetworkReceiver.isConnected(this)) {
             loadOfflineContent(folderPath);
             return;
         }
-
         mainHandler.post(new Runnable() {
             @Override public void run() {
                 if (swipeRefresh != null) swipeRefresh.setRefreshing(true);
@@ -442,13 +471,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         });
 
-        final String username = session.getUsername();
-        String tempEncodedPath = "";
-        try { tempEncodedPath = URLEncoder.encode(folderPath, "UTF-8"); } catch (Exception e) { tempEncodedPath = folderPath; }
-        final String encodedPath = tempEncodedPath;
-
         final String effectiveUsername = isSharedPreview ? sharedOwner : session.getUsername();
-        final String currentTargetUrl = Config.SERVER_URL + "/browse?username=" + effectiveUsername + "&folder=" + encodedPath;
+        final String currentTargetUrl = buildServerUrl("/browse", "username", effectiveUsername, "folder", folderPath);
         final String currentFolderRequest = folderPath;
 
         executor.execute(new Runnable() {
@@ -462,6 +486,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     if (!response.isSuccessful()) throw new Exception("Error " + response.code());
 
                     isRetryingConnection = false;
+                    isConfirmedOffline = false;
 
                     JSONObject json = new JSONObject(response.body().string());
                     if (json.has("current_path")) currentPath = json.getString("current_path");
@@ -536,13 +561,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                             if (NetworkReceiver.isConnected(MainActivity.this)) {
                                 if (!isRetryingConnection) {
                                     isRetryingConnection = true;
-                                    attemptServerRediscovery(folderPath);
+                                    attemptServerRediscovery(currentFolderRequest);
                                     return;
                                 }
                             }
 
                             isRetryingConnection = false;
-                            android.util.Log.e("Offline", "Fallo red final, carregant offline: " + e.getMessage());
+                            isConfirmedOffline = true;
 
                             loadOfflineContent(currentFolderRequest);
 
@@ -566,47 +591,27 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         } else {
             cardHeader.setVisibility(View.VISIBLE);
             ivPlaylistHeader.setVisibility(View.VISIBLE);
-            String headerUrl = "";
-            try {
-                String encodedHeaderPath = URLEncoder.encode(currentPath, "UTF-8");
-                headerUrl = Config.SERVER_URL + "/cover?username=" + session.getUsername() + "&path=" + encodedHeaderPath;
-            } catch (Exception e) {}
-
-            android.util.Log.d("COVER_DEBUG", "Intentant carregar caràtula des de: " + headerUrl);
+            String headerUrl = buildServerUrl("/cover", "username", session.getUsername(), "path", currentPath);
 
             Glide.with(this)
                     .load(headerUrl)
-                    .listener(new com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable>() {
-                        @Override
-                        public boolean onLoadFailed(@Nullable com.bumptech.glide.load.engine.GlideException e, Object model, com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target, boolean isFirstResource) {
-                            String errorMsg = e != null ? e.getMessage() : "Desconegut";
-                            if (e != null && e.getRootCauses() != null) {
-                                for (Throwable t : e.getRootCauses()) {
-                                    errorMsg += " | Causa: " + t.getMessage();
-                                }
-                            }
-                            android.util.Log.e("COVER_DEBUG", "❌ ERROR carregant caràtula: " + errorMsg);
-                            return false;
-                        }
-
-                        @Override
-                        public boolean onResourceReady(android.graphics.drawable.Drawable resource, Object model, com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target, com.bumptech.glide.load.DataSource dataSource, boolean isFirstResource) {
-                            android.util.Log.d("COVER_DEBUG", "✨ Caràtula carregada correctament!");
-                            return false;
-                        }
-                    })
                     .placeholder(R.mipmap.ic_launcher)
                     .error(R.mipmap.ic_launcher)
                     .centerCrop()
                     .into(ivPlaylistHeader);
         }
     }
+
     private void attemptServerRediscovery(final String pendingFolderPath) {
         UrlFetcher.fetchLatestUrl(session.getInvitationCode(), new UrlFetcher.UrlCallback() {
             @Override
             public void onUrlFound(final String newUrl) {
                 runOnUiThread(() -> {
+                    try { client.connectionPool().evictAll(); } catch (Exception ignored) {}
                     Config.SERVER_URL = newUrl;
+                    isConfirmedOffline = false;
+                    isRetryingConnection = false;
+                    needsUrlRefresh = false;
                     getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
                             .edit().putString("last_server_url", newUrl).apply();
                     Toast.makeText(MainActivity.this, getString(R.string.toast_server_found_reconnecting), Toast.LENGTH_SHORT).show();
@@ -622,6 +627,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private void handleDiscoveryFailure(String folderPath) {
         isRetryingConnection = false;
+        isConfirmedOffline = true;
         loadOfflineContent(folderPath);
         tvStatus.setText(getString(R.string.status_server_unavailable));
         tvStatus.setVisibility(View.VISIBLE);
@@ -703,8 +709,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             if (item.getPath().startsWith("/")) {
                 urlToPlay = item.getPath();
             } else {
-                String encodedPath = URLEncoder.encode(item.getPath(), "UTF-8");
-                urlToPlay = Config.SERVER_URL + "/stream?username=" + effectiveUsername + "&path=" + encodedPath;
+                urlToPlay = buildServerUrl("/stream", "username", effectiveUsername, "path", item.getPath());
             }
             musicService.playUrl(urlToPlay, musicList, currentSongIndex, effectiveUsername);
         } catch (Exception e) {
@@ -750,17 +755,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 } catch (Exception e) {
                 }
             }
-            try {
-                urlToTry = Config.SERVER_URL + "/cover?username=" + (isSharedPreview ? sharedOwner : session.getUsername()) + "&path=" + URLEncoder.encode(currentPath, "UTF-8");
-            } catch (Exception e) {
-            }
+            urlToTry = buildServerUrl("/cover", "username", (isSharedPreview ? sharedOwner : session.getUsername()), "path", currentPath);
         } else if (song.getPath().startsWith("/")) {
             if (offlineDB != null) {
                 String originalPath = offlineDB.getServerPathForLocalFile(song.getPath());
                 if (originalPath != null) {
-                    try {
-                        urlToTry = Config.SERVER_URL + "/cover?username=" + (isSharedPreview ? sharedOwner : session.getUsername()) + "&path=" + URLEncoder.encode(originalPath, "UTF-8");
-                    } catch (Exception e) {}
+                    urlToTry = buildServerUrl("/cover", "username", (isSharedPreview ? sharedOwner : session.getUsername()), "path", originalPath);
                 }
 
                 List<MusicItem> playlists = offlineDB.getOfflinePlaylists();
@@ -779,9 +779,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 }
             }
         } else {
-            try {
-                urlToTry = Config.SERVER_URL + "/cover?username=" + (isSharedPreview ? sharedOwner : session.getUsername()) + "&path=" + URLEncoder.encode(song.getPath(), "UTF-8");
-            } catch (Exception e) {}
+            urlToTry = buildServerUrl("/cover", "username", (isSharedPreview ? sharedOwner : session.getUsername()), "path", song.getPath());
         }
 
         if (ivCover != null) {
@@ -858,41 +856,47 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         swipeRefresh.setColorSchemeColors(0xFF1DB954);
         swipeRefresh.setOnRefreshListener(() -> {
             try { Glide.get(MainActivity.this).clearMemory(); } catch (Exception e) {}
+            try { client.connectionPool().evictAll(); } catch (Exception e) {}
 
-            if (tvStatus.getVisibility() == View.VISIBLE || Config.SERVER_URL == null || Config.SERVER_URL.isEmpty()) {
+            if (!NetworkReceiver.isConnected(MainActivity.this)) {
+                Toast.makeText(MainActivity.this, "Revisa la connexió a Internet", Toast.LENGTH_SHORT).show();
+                swipeRefresh.setRefreshing(false);
+                loadOfflineContent(currentPath);
+                return;
+            }
 
-                if (!NetworkReceiver.isConnected(MainActivity.this)) {
-                    Toast.makeText(MainActivity.this, "Revisa la connexió a Internet", Toast.LENGTH_SHORT).show();
-                    swipeRefresh.setRefreshing(false);
-                    return;
-                }
+            if (session.hasInvitationCode()) {
+                tvStatus.setText("Sincronitzant servidor...");
+                tvStatus.setVisibility(View.VISIBLE);
+                UrlFetcher.fetchLatestUrl(session.getInvitationCode(), new UrlFetcher.UrlCallback() {
+                    @Override
+                    public void onUrlFound(String url) {
+                        Config.SERVER_URL = url;
+                        getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
+                                .edit().putString("last_server_url", url).apply();
+                        isConfirmedOffline = false;
+                        isRetryingConnection = false;
+                        needsUrlRefresh = false;
+                        runOnUiThread(() -> {
+                            tvStatus.setVisibility(View.GONE);
+                            fetchMusicContent(Config.SERVER_URL, currentPath);
+                        });
+                    }
 
-                if (session.hasInvitationCode()) {
-                    tvStatus.setText("Sincronitzant servidor...");
-                    UrlFetcher.fetchLatestUrl(session.getInvitationCode(), new UrlFetcher.UrlCallback() {
-                        @Override
-                        public void onUrlFound(String url) {
-                            Config.SERVER_URL = url;
-                            runOnUiThread(() -> {
-                                tvStatus.setVisibility(View.GONE);
-                                fetchMusicContent(Config.SERVER_URL, currentPath);
-                                swipeRefresh.setRefreshing(false);
-                            });
-                        }
-
-                        @Override
-                        public void onError(Exception e) {
-                            runOnUiThread(() -> {
-                                tvStatus.setText("Mode Sense Connexió");
-                                swipeRefresh.setRefreshing(false);
-                            });
-                        }
-                    });
-                } else {
-                    swipeRefresh.setRefreshing(false);
-                }
+                    @Override
+                    public void onError(Exception e) {
+                        runOnUiThread(() -> {
+                            isConfirmedOffline = true;
+                            loadOfflineContent(currentPath);
+                            tvStatus.setText("Mode Sense Connexió");
+                            tvStatus.setVisibility(View.VISIBLE);
+                            swipeRefresh.setRefreshing(false);
+                        });
+                    }
+                });
             } else {
                 isRetryingConnection = false;
+                isConfirmedOffline = false;
                 fetchMusicContent(Config.SERVER_URL, currentPath);
             }
         });
@@ -1090,10 +1094,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             public void run() {
                 try {
                     String folderPath = playlistItem.getPath();
-                    String encodedFolder = URLEncoder.encode(folderPath, "UTF-8");
                     String username = session.getUsername();
-
-                    String urlList = Config.SERVER_URL + "/browse?username=" + username + "&folder=" + encodedFolder;
+                    String urlList = buildServerUrl("/browse", "username", username, "folder", folderPath);
                     Request requestList = new Request.Builder().url(urlList).build();
                     Response responseList = client.newCall(requestList).execute();
 
@@ -1113,7 +1115,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     if (!privateDir.exists()) privateDir.mkdirs();
 
                     try {
-                        String coverUrl = Config.SERVER_URL + "/cover?username=" + username + "&path=" + encodedFolder;
+                        String coverUrl = buildServerUrl("/cover", "username", username, "path", folderPath);
                         Request reqCover = new Request.Builder().url(coverUrl).build();
                         Response resCover = client.newCall(reqCover).execute();
 
@@ -1126,7 +1128,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         }
                         resCover.close();
                     } catch (Exception e) {
-                        android.util.Log.e("DL_COVER", "No s'ha pogut baixar portada: " + e.getMessage());
                     }
 
                     int downloadedCount = 0;
@@ -1146,8 +1147,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                 .setContentText(getString(R.string.notif_download_progress, progressPercent, name.replace(".mp3", "")));
                         notificationManager.notify(notificationId, builder.build());
 
-                        String encodedFilePath = URLEncoder.encode(serverPath, "UTF-8");
-                        String streamUrl = Config.SERVER_URL + "/stream?username=" + username + "&path=" + encodedFilePath;
+                        String streamUrl = buildServerUrl("/stream", "username", username, "path", serverPath);
 
                         Request reqFile = new Request.Builder().url(streamUrl).header("x-secret-key", Config.API_SECRET_KEY).build();
                         Response resFile = client.newCall(reqFile).execute();
@@ -1323,8 +1323,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                             String safeCoverName = "cover_" + playlist.getName().replaceAll("[^a-zA-Z0-9.-]", "_") + ".jpg";
                             File localCover = new File(privateDir, safeCoverName);
                             if (localCover.exists()) {
-                                boolean deleted = localCover.delete();
-                                android.util.Log.d("COVER", "Caràtula local esborrada: " + deleted);
+                                localCover.delete();
                             }
                         } catch (Exception e) {
                             e.printStackTrace();
@@ -1462,9 +1461,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             startActivity(new Intent(MainActivity.this, SettingsActivity.class));
             overridePendingTransition(R.anim.slide_up_enter, R.anim.hold);
         }
-        else if (i.getItemId() == R.id.nav_anime) {
-            launchJellyfinServer();
-        }
         else if(i.getItemId()==R.id.nav_logout) logoutUser();
         drawerLayout.closeDrawer(GravityCompat.START);
         return true;
@@ -1488,9 +1484,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         applyPureBlackTheme();
         updatePlayerIcons();
 
+        try { client.connectionPool().evictAll(); } catch (Exception ignored) {}
+
         if (networkReceiver == null) {
             networkReceiver = new NetworkReceiver(this::handleNetworkChange);
             registerReceiver(networkReceiver, new android.content.IntentFilter(android.net.ConnectivityManager.CONNECTIVITY_ACTION));
+        }
+
+        if (NetworkReceiver.isConnected(this) && (isConfirmedOffline || needsUrlRefresh || musicList.isEmpty())) {
+            lastKnownConnectionState = null;
+            handleNetworkChange(true);
         }
     }
 
@@ -1500,6 +1503,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         try {
             if (networkReceiver != null) unregisterReceiver(networkReceiver);
         } catch (Exception e) {}
+        networkReceiver = null;
     }
 
     @Override
@@ -1923,17 +1927,21 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void handleNetworkChange(boolean isConnected) {
-
-        if (lastKnownConnectionState != null && lastKnownConnectionState == isConnected) {
+        if (lastKnownConnectionState != null && lastKnownConnectionState == isConnected && !isConfirmedOffline && !needsUrlRefresh) {
             return;
         }
         lastKnownConnectionState = isConnected;
 
+        try { client.connectionPool().evictAll(); } catch (Exception ignored) {}
+
         if (isConnected) {
+            isConfirmedOffline = false;
+            isRetryingConnection = false;
             tvStatus.setVisibility(View.GONE);
-            Toast.makeText(this, getString(R.string.toast_connection_restored), Toast.LENGTH_SHORT).show();
 
             mainHandler.postDelayed(() -> {
+                if (!NetworkReceiver.isConnected(MainActivity.this)) return;
+
                 if (session.hasInvitationCode()) {
                     UrlFetcher.fetchLatestUrl(session.getInvitationCode(), new UrlFetcher.UrlCallback() {
                         @Override
@@ -1941,7 +1949,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                             Config.SERVER_URL = url;
                             getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
                                     .edit().putString("last_server_url", url).apply();
-                            runOnUiThread(() -> refreshCurrentContent());
+                            isConfirmedOffline = false;
+                            isRetryingConnection = false;
+                            needsUrlRefresh = false;
+                            runOnUiThread(() -> {
+                                tvStatus.setVisibility(View.GONE);
+                                fetchMusicContent(Config.SERVER_URL, currentPath);
+                                if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
+                            });
                         }
                         @Override
                         public void onError(Exception e) {
@@ -2566,45 +2581,5 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 e.printStackTrace();
             }
         }
-    }
-
-    private void launchJellyfinServer() {
-        Toast.makeText(this, getString(R.string.toast_connecting_anime_server), Toast.LENGTH_SHORT).show();
-
-        executor.execute(() -> {
-            try {
-                Request request = new Request.Builder()
-                        .url(Config.SERVER_URL + "/anime/server")
-                        .build();
-
-                Response response = client.newCall(request).execute();
-
-                if (response.isSuccessful()) {
-                    String resStr = response.body().string();
-                    JSONObject json = new JSONObject(resStr);
-                    final String animeUrl = json.getString("url");
-
-                    mainHandler.post(() -> {
-                        android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                        android.content.ClipData clip = android.content.ClipData.newPlainText("Jellyfin URL", animeUrl);
-                        clipboard.setPrimaryClip(clip);
-
-                        Toast.makeText(MainActivity.this, getString(R.string.toast_url_copied_jellyfin), Toast.LENGTH_LONG).show();
-
-                        Intent launchIntent = getPackageManager().getLaunchIntentForPackage("org.jellyfin.mobile");
-                        if (launchIntent != null) {
-                            startActivity(launchIntent);
-                        } else {
-                            Toast.makeText(MainActivity.this, getString(R.string.toast_install_jellyfin_first), Toast.LENGTH_SHORT).show();
-                            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=org.jellyfin.mobile")));
-                        }
-                    });
-                } else {
-                    mainHandler.post(() -> Toast.makeText(MainActivity.this, getString(R.string.toast_anime_url_not_found), Toast.LENGTH_SHORT).show());
-                }
-            } catch (Exception e) {
-                mainHandler.post(() -> Toast.makeText(MainActivity.this, getString(R.string.error_connection_generic), Toast.LENGTH_SHORT).show());
-            }
-        });
     }
 }
