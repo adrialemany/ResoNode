@@ -1075,22 +1075,9 @@ def share_import_items(data: ShareImportItems):
             except: pass 
     return {"success": True, "added": count}
 
-@app.get("/anime/server")
-def get_anime_server():
-    # Path where your script saves the Jellyfin Cloudflare URL
-    file_path = "/home/adri/ULTIMA_URL_ANIME.txt"
-    try:
-        if os.path.exists(file_path):
-            with open(file_path, "r", encoding="utf-8") as f:
-                url = f.read().strip()
-                if url:
-                    return {"url": url}
-        return JSONResponse({"error": "No s'ha trobat la URL de l'anime"}, 404)
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, 500)
-
 if __name__ == "__main__":
     import uvicorn
     # 🔥 LISTEN ON ALL IPS 🔥
     print(f"🔥 INICIANDO SERVIDOR EN PUERTO {SERVER_PORT} 🔥")
     uvicorn.run(app, host="0.0.0.0", port=SERVER_PORT)
+
