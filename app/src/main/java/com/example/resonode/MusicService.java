@@ -57,6 +57,8 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 
+import android.os.SystemClock;
+
 public class MusicService extends Service implements AudioManager.OnAudioFocusChangeListener {
 
     private static final String CHANNEL_ID = "ResoNodeChannel";
@@ -71,6 +73,72 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
     private List<MusicItem> playlist = new ArrayList<>();
     private int currentIndex = -1;
     private long songStartTime = 0;
+    private long listenedMs = 0;
+    private long playingSince = 0;
+
+    private void startListeningClock() {
+        if (playingSince == 0) playingSince = SystemClock.elapsedRealtime();
+    }
+
+    private void stopListeningClock() {
+        if (playingSince != 0) {
+            listenedMs += SystemClock.elapsedRealtime() - playingSince;
+            playingSince = 0;
+        }
+    }
+
+    private void resetListeningClock() {
+        listenedMs = 0;
+        playingSince = 0;
+    }
+    private void flushListening(boolean synchronous) {
+        stopListeningClock();
+        final MusicItem song = getCurrentSong();
+        final int seconds = (int) (listenedMs / 1000);
+        resetListeningClock();
+        clearPendingListen();
+        if (song == null || seconds <= 0) return;
+
+        final String name = song.getName();
+        final String artist = song.getArtist();
+        Runnable save = () -> {
+            OfflineDB db = new OfflineDB(getApplicationContext());
+            db.logPlay(name, artist, seconds);
+            if (!synchronous) syncHistory(getApplicationContext());
+        };
+        if (synchronous) save.run(); else executor.execute(save);
+    }
+
+    private void savePendingListen() {
+        MusicItem song = getCurrentSong();
+        if (song == null || listenedMs <= 0) return;
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putString("pending_listen_name", song.getName())
+                .putString("pending_listen_artist", song.getArtist())
+                .putLong("pending_listen_ms", listenedMs)
+                .apply();
+    }
+
+    private void clearPendingListen() {
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .remove("pending_listen_name")
+                .remove("pending_listen_artist")
+                .remove("pending_listen_ms")
+                .apply();
+    }
+
+    private void recoverPendingListen() {
+        SharedPreferences p = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        final long ms = p.getLong("pending_listen_ms", 0);
+        final String name = p.getString("pending_listen_name", null);
+        final String artist = p.getString("pending_listen_artist", "");
+        clearPendingListen();
+        if (name == null || ms < 1000) return;
+        executor.execute(() -> {
+            OfflineDB db = new OfflineDB(getApplicationContext());
+            db.logPlay(name, artist, (int) (ms / 1000));
+        });
+    }
     private String currentUsername = "";
     private boolean resumeOnFocusGain = false;
 
@@ -198,6 +266,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
         initializePlayer();
         initializeMediaSession();
         restoreState();
+        recoverPendingListen();
 
         IntentFilter filter = new IntentFilter();
         filter.addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED);
@@ -230,6 +299,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
             public void onPrepared(MediaPlayer mp) {
                 failureCount = 0;
                 mp.start();
+                startListeningClock();
 
                 songStartTime = System.currentTimeMillis();
 
@@ -260,15 +330,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
             }
 
             MusicItem currentItem = getCurrentSong();
-
-            if (songDurationMs > 30000 && currentItem != null) {
-                final int secondsToLog = songDurationMs / 1000;
-                executor.execute(() -> {
-                    OfflineDB db = new OfflineDB(getApplicationContext());
-                    db.logPlay(currentItem.getName(), currentItem.getArtist(), secondsToLog);
-                    syncHistory(getApplicationContext());
-                });
-            }
+            flushListening(false);
 
             failureCount = 0;
 
@@ -290,6 +352,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
     }
 
     private void handlePlaybackError() {
+        stopListeningClock();
         failureCount++;
         if (failureCount < MAX_RETRIES) {
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
@@ -372,6 +435,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
             else if ("ACTION_PLAY_PAUSE".equals(intent.getAction())) {
                 if (isPlaying()) pauseMusic(); else resumeMusic();
             } else if ("ACTION_CLOSE".equals(intent.getAction())) {
+                flushListening(true);
                 stopForeground(true);
                 stopSelf();
                 System.exit(0);
@@ -381,6 +445,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
     }
 
     public void playUrl(String url, List<MusicItem> list, int index, String username) {
+        flushListening(false);
         this.failureCount = 0;
         this.currentQueued = null;
         this.playlist = new ArrayList<>(list);
@@ -461,6 +526,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
     }
 
     private void requestAudioFocusAndPlay(final String url, final MusicItem originalItem, final boolean isLocalFile) {
+        stopListeningClock();
         int result = audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
         if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
             try {
@@ -512,6 +578,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
         if (mediaPlayer != null && !mediaPlayer.isPlaying()) {
             if (audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
                 mediaPlayer.start();
+                startListeningClock();
                 updateNotification();
                 if (callback != null) callback.onPlaybackStateChanged(true);
             }
@@ -521,6 +588,8 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
     public void pauseMusic() {
         if (mediaPlayer != null && mediaPlayer.isPlaying()) {
             mediaPlayer.pause();
+            stopListeningClock();
+            savePendingListen();
             updateNotification();
             saveState();
             if (callback != null) callback.onPlaybackStateChanged(false);
@@ -533,6 +602,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
     }
 
     public void playNext() {
+        flushListening(false);
         if (!queue.isEmpty()) {
             currentQueued = queue.remove(0);
             notifyQueueChanged();
@@ -564,6 +634,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
     }
 
     public void playPrev() {
+        flushListening(false);
         failureCount = 0;
         if (currentQueued != null) {
             currentQueued = null;
@@ -804,6 +875,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
 
     @Override public void onDestroy() {
         super.onDestroy();
+        flushListening(true);
         try { unregisterReceiver(bluetoothReceiver); } catch (Exception e) {}
 
         saveState();

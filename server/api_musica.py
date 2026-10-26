@@ -107,8 +107,18 @@ async def verify_secret_key(request: Request, call_next):
 
 def secure_path(path_str):
     if not path_str: return ""
-    clean = path_str.replace("..", "").replace("~", "").replace("\\", "/")
-    return os.path.basename(clean) if os.path.isabs(clean) else clean
+    clean = path_str.replace("\\", "/").replace("~", "")
+    if os.path.isabs(clean):
+        return os.path.basename(clean)
+    # Quita solo los componentes ".." (no los puntos dentro de un nombre, como "Webs..mp3")
+    return "/".join(p for p in clean.split("/") if p != "..")
+
+def has_traversal(p):
+    """True si la ruta intenta salir de su carpeta: es absoluta o algún componente es '..'."""
+    if not p: return False
+    p = p.replace("\\", "/")
+    if p.startswith("/"): return True
+    return any(part == ".." for part in p.split("/"))
 
 def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', os.path.basename(s))]
@@ -382,7 +392,7 @@ def add_from_vault(data: AddFromVault):
     if not os.path.exists(dest_dir): os.makedirs(dest_dir)
     count = 0
     for item_path in data.items:
-        if ".." in item_path: continue
+        if has_traversal(item_path): continue
         
         # 🔥 SMART PATH (Searches where it belongs) 🔥
         full_src = ""
@@ -411,7 +421,7 @@ def add_from_vault(data: AddFromVault):
 def browse(username: str, folder: str = ""):
     safe_user = secure_path(username)
     folder = folder.replace("\\", "/") 
-    if ".." in folder: return JSONResponse({"error": "Ruta inválida"}, 403)
+    if has_traversal(folder): return JSONResponse({"error": "Ruta inválida"}, 403)
     
     is_vault = False
     target = ""
@@ -480,7 +490,7 @@ def add_s(data: AddSongs):
                 try: os.symlink(src_path, dst); c += 1
                 except: pass
     for s in data.songs:
-        if ".." in s: continue
+        if has_traversal(s): continue
         
         # 🔥 SMART PATH (Searches where it belongs) 🔥
         full_src = ""
@@ -498,7 +508,7 @@ def add_s(data: AddSongs):
 # --- 🔥 HERE WE APPLY THE STREAMING CHUNKS IMPROVEMENT 🔥 ---
 @app.get("/stream")
 def stream(request: Request, username: str, path: str):
-    if "../" in path: return JSONResponse({"error": "Hack detected"}, 403)
+    if has_traversal(path): return JSONResponse({"error": "Hack detected"}, 403)
     safe_user = secure_path(username)
     
     p_general = os.path.join(BASE_DIR, path)
@@ -576,14 +586,14 @@ def stream(request: Request, username: str, path: str):
 @app.post("/playlist/delete_item")
 def delete_item(data: DeleteItem):
     safe_user = secure_path(data.username)
-    if ".." in data.path: return {"error": "Hack detected"}
+    if has_traversal(data.path): return {"error": "Hack detected"}
     blacklist = ["MusicVault", "General", "updates", "users_db", "__pycache__"]
     if safe_user in blacklist:
         return {"error": "Hack Detected: No tens permís per a tocar carpetes del sistema."}
 
     target = os.path.join(BASE_DIR, safe_user, data.path)
 
-    if "General" in data.path and ".." in data.path: return {"error": "No permitido"}
+    if "General" in data.path and has_traversal(data.path): return {"error": "No permitido"}
 
     try:
         if os.path.isdir(target): shutil.rmtree(target)
@@ -786,8 +796,9 @@ def get_stats(username: str, period: str = "week"): # period: week, month, year
                         artist = parts[4] if len(parts) > 4 else "Unknown"
                         
                         total_seconds += dur
-                        full_name = f"{song} - {artist}"
-                        song_counts[full_name] = song_counts.get(full_name, 0) + 1
+                        if dur >= 30:
+                            full_name = f"{song} - {artist}"
+                            song_counts[full_name] = song_counts.get(full_name, 0) + 1
         
         # Sort Top 5
         sorted_songs = sorted(song_counts.items(), key=lambda item: item[1], reverse=True)[:5]
@@ -1042,38 +1053,50 @@ def share_import_items(data: ShareImportItems):
     info = shares[data.token]
     owner = info["owner"]
     src_path = info["path"]
-    
+
     safe_new_user = secure_path(data.target_username)
     safe_target_pl = secure_path(data.target_playlist)
-    
+
     dest_dir = os.path.join(BASE_DIR, safe_new_user, safe_target_pl)
     if not os.path.exists(dest_dir): os.makedirs(dest_dir)
-    
+
     if src_path.startswith("General"):
         full_src_path = os.path.join(BASE_DIR, src_path)
     else:
         full_src_path = os.path.join(BASE_DIR, owner, src_path)
-        
+
     is_file = os.path.isfile(full_src_path)
-    
+
     count = 0
+    skipped = []
     for filename in data.items:
         safe_file = secure_path(filename)
-        
-        # If a single song was shared, the source path is already the file
-        if is_file:
-            item_src = full_src_path
-        else:
-            item_src = os.path.join(full_src_path, safe_file)
-            
-        if os.path.isfile(item_src) and item_src.lower().endswith(".mp3"):
-            dst_item = os.path.join(dest_dir, f"{get_next_prefix(dest_dir)}_{os.path.basename(item_src)}")
-            try:
-                real_src = os.path.realpath(item_src)
-                os.symlink(real_src, dst_item)
-                count += 1
-            except: pass 
-    return {"success": True, "added": count}
+        item_src = full_src_path if is_file else os.path.join(full_src_path, safe_file)
+
+        if not (os.path.isfile(item_src) and item_src.lower().endswith(".mp3")):
+            print(f"[import_items] NO ENCONTRADO: {filename!r} -> {item_src}", flush=True)
+            skipped.append(filename)
+            continue
+
+        dst_item = os.path.join(dest_dir, f"{get_next_prefix(dest_dir)}_{os.path.basename(item_src)}")
+        try:
+            os.symlink(os.path.realpath(item_src), dst_item)
+            count += 1
+        except Exception as e:
+            print(f"[import_items] ERROR symlink {dst_item}: {e}", flush=True)
+            skipped.append(filename)
+
+    # Portada de la playlist compartida (si la tiene y aún no hay una)
+    if not is_file:
+        for cover in ("cover.jpg", "cover.png"):
+            src_cover = os.path.join(full_src_path, cover)
+            dst_cover = os.path.join(dest_dir, cover)
+            if os.path.isfile(src_cover) and not os.path.exists(dst_cover):
+                try: shutil.copy2(src_cover, dst_cover)
+                except Exception as e: print(f"[import_items] ERROR portada: {e}", flush=True)
+                break
+
+    return {"success": count > 0, "added": count, "skipped": len(skipped)}
 
 if __name__ == "__main__":
     import uvicorn

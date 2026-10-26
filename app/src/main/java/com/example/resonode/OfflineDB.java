@@ -288,7 +288,7 @@ public class OfflineDB extends SQLiteOpenHelper {
             result.put("total_hours", totalSeconds / 3600.0);
 
             String queryTop = "SELECT " + KEY_NAME + ", COUNT(*) as plays FROM " + TABLE_HISTORY +
-                    " WHERE " + KEY_TIMESTAMP + " >= ? " +
+                    " WHERE " + KEY_TIMESTAMP + " >= ? AND " + KEY_DURATION + " >= 30 " +
                     " GROUP BY " + KEY_NAME +
                     " ORDER BY plays DESC LIMIT 5";
 
