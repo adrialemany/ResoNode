@@ -199,7 +199,7 @@ public class WrappedActivity extends AppCompatActivity {
 
                         if (!name.equals(session.getUsername())) {
                             userNames.add(name);
-                            displayNames.add(name + " (" + mins + " min)");
+                            displayNames.add(getString(R.string.label_user_minutes, name, mins));
                         }
                     }
 

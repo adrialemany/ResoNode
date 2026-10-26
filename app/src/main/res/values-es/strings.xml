@@ -261,4 +261,31 @@
     <string name="status_syncing_server">Sincronizando servidor…</string>
 
     <string name="btn_local_mode">Modo Local</string>
+
+    <string name="toolbar_add_all">AÑADIR TODAS</string>
+    <string name="toast_import_failed">No se han podido importar las canciones</string>
+    <string name="toast_import_partial">%1$d de %2$d canciones importadas a %3$s</string>
+
+    <!-- Textos que antes estaban hardcodeados -->
+    <string name="error_layout">Error de diseño:\n%1$s</string>
+    <string name="title_shared">Compartido</string>
+    <string name="label_local_user">Usuario local</string>
+    <string name="unknown_device">Desconocido</string>
+    <string name="toast_not_available_offline">No disponible sin conexión</string>
+    <string name="channel_player_name">Reproductor ResoNode</string>
+    <string name="notif_service_active">Servicio activo</string>
+    <string name="notif_action_prev">Anterior</string>
+    <string name="notif_action_play">Reproducir</string>
+    <string name="notif_action_pause">Pausa</string>
+    <string name="notif_action_next">Siguiente</string>
+    <string name="notif_action_close">Cerrar</string>
+
+    <!-- Cola -->
+    <string name="action_add_to_queue">Añadir a la cola</string>
+    <string name="toast_added_to_queue">Añadida a la cola</string>
+    <string name="toast_added_count_to_queue">%1$d canciones añadidas a la cola</string>
+    <string name="toast_no_songs_to_queue">Esta playlist no tiene canciones</string>
+    <string name="title_queue">Cola</string>
+    <string name="queue_empty">La cola está vacía</string>
+    <string name="queue_hint">Arrastra ≡ para ordenar · Desliza para quitar</string>
 </resources>

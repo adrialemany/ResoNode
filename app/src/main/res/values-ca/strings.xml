@@ -11,10 +11,10 @@
 
     <!-- Login -->
     <string name="error_missing_username">Falta usuari</string>
-    <string name="error_missing_password">Falta contrassenya</string>
+    <string name="error_missing_password">Falta contrasenya</string>
     <string name="error_missing_invitation_code">Falta el Codi d\'Invitació</string>
     <string name="error_invalid_invitation_code">Codi d\'Invitació invàlid o error de xarxa</string>
-    <string name="error_wrong_password">Contrassenya incorrecta</string>
+    <string name="error_wrong_password">Contrasenya incorrecta</string>
     <string name="error_security_invalid_key">Error de seguretat (Secret Key invàlida)</string>
     <string name="error_server_code">Error Servidor: %1$d</string>
     <string name="error_connection">Error connexió: %1$s</string>
@@ -55,7 +55,7 @@
     <string name="action_rename">Reanomenar</string>
     <string name="action_add_to_playlist">Afegir a Playlist</string>
     <string name="action_download_offline">Descarregar Offline</string>
-    <string name="action_delete_offline">Borrar Offline</string>
+    <string name="action_delete_offline">Esborrar Offline</string>
     <string name="action_change_cover">Canviar Portada</string>
     <string name="action_share">Compartir</string>
     <string name="chooser_select_cover">Selecciona una portada</string>
@@ -63,9 +63,9 @@
     <string name="toolbar_add_count">AFEGIR (%1$d)</string>
     <string name="toolbar_selected_count">%1$d sel.</string>
 
-    <string name="title_delete_songs_count">Borrar %1$d cançons?</string>
+    <string name="title_delete_songs_count">Esborrar %1$d cançons?</string>
     <string name="msg_delete_songs_confirm">Aquesta acció eliminarà les cançons seleccionades de la playlist.</string>
-    <string name="btn_yes">SI</string>
+    <string name="btn_yes">SÍ</string>
     <string name="btn_no">NO</string>
     <string name="toast_local_songs_removed">Cançons locals eliminades</string>
 
@@ -80,21 +80,21 @@
     <string name="error_reading_playlist">Error al llegir playlist</string>
 
     <string name="progress_uploading_cover">Pujant portada...</string>
-    <string name="toast_cover_updated">Portada Actualizada!</string>
-    <string name="toast_upload_failed">Fallo al subir: %1$s</string>
+    <string name="toast_cover_updated">Portada actualitzada!</string>
+    <string name="toast_upload_failed">Error en pujar: %1$s</string>
 
     <string name="error_server_generic">Error servidor</string>
 
     <string name="title_new">Nova</string>
     <string name="btn_ok">OK</string>
-    <string name="title_delete">Borrar</string>
+    <string name="title_delete">Esborrar</string>
     <string name="toast_local_song_removed">Cançó local eliminada</string>
-    <string name="title_rename">Renombrar</string>
+    <string name="title_rename">Reanomenar</string>
 
     <string name="item_new_ellipsis">Nova...</string>
     <string name="title_new_playlist_name">Nom de la nova playlist</string>
     <string name="toast_added_to_playlist">Afegit a %1$s</string>
-    <string name="title_name">Nombre</string>
+    <string name="title_name">Nom</string>
     <string name="title_playlist_name">Nom de la playlist</string>
 
     <string name="changelog_default">Millores generals.</string>
@@ -112,16 +112,16 @@
     <string name="notif_download_error_text">No s\'ha pogut baixar l\'actualització</string>
     <string name="toast_update_error">Error actualitzant</string>
 
-    <string name="title_new_version_available">¡Nova versió disponible! v%1$d</string>
-    <string name="msg_update_required">És necesari instal·lar esta actualizació.</string>
+    <string name="title_new_version_available">Nova versió disponible! v%1$d</string>
+    <string name="msg_update_required">És necessari instal·lar esta actualització.</string>
     <string name="btn_update">ACTUALITZAR</string>
     <string name="btn_close">TANCAR</string>
 
-    <string name="title_delete_downloads">Borrar descàrregues</string>
-    <string name="msg_delete_downloads_confirm">Eliminar els arxius deescarregats de \'%1$s\'? (La playlist seguirà al servidor)</string>
-    <string name="btn_delete">BORRAR</string>
+    <string name="title_delete_downloads">Esborrar descàrregues</string>
+    <string name="msg_delete_downloads_confirm">Eliminar els arxius descarregats de \'%1$s\'? (La playlist seguirà al servidor)</string>
+    <string name="btn_delete">ESBORRAR</string>
     <string name="btn_cancel">CANCEL·LAR</string>
-    <string name="toast_downloads_deleted">Descargàrregues eliminades</string>
+    <string name="toast_downloads_deleted">Descàrregues eliminades</string>
 
     <string name="toast_connection_restored">Connexió reestablerta</string>
 
@@ -149,7 +149,7 @@
     <string name="toast_invalid_expired_link">Enllaç invàlid o caducat</string>
     <string name="error_network">Error de xarxa</string>
 
-    <string name="toast_songs_imported_to">Cançó/ons importades a %1$s</string>
+    <string name="toast_songs_imported_to">Cançó(ns) importada(es) a %1$s</string>
 
     <string name="unknown_file">Arxiu Desconegut</string>
     <string name="local_device">Dispositiu Local</string>
@@ -261,4 +261,31 @@
     <string name="status_syncing_server">Sincronitzant servidor...</string>
 
     <string name="btn_local_mode">Mode Local</string>
+
+    <string name="toolbar_add_all">AFEGIR TOTES</string>
+    <string name="toast_import_failed">No s\'han pogut importar les cançons</string>
+    <string name="toast_import_partial">%1$d de %2$d cançons importades a %3$s</string>
+
+    <!-- Textos que abans estaven hardcodejats -->
+    <string name="error_layout">Error de disseny:\n%1$s</string>
+    <string name="title_shared">Compartit</string>
+    <string name="label_local_user">Usuari local</string>
+    <string name="unknown_device">Desconegut</string>
+    <string name="toast_not_available_offline">No disponible sense connexió</string>
+    <string name="channel_player_name">Reproductor ResoNode</string>
+    <string name="notif_service_active">Servei actiu</string>
+    <string name="notif_action_prev">Anterior</string>
+    <string name="notif_action_play">Reproduir</string>
+    <string name="notif_action_pause">Pausa</string>
+    <string name="notif_action_next">Següent</string>
+    <string name="notif_action_close">Tancar</string>
+
+    <!-- Cua -->
+    <string name="action_add_to_queue">Afegir a la cua</string>
+    <string name="toast_added_to_queue">Afegida a la cua</string>
+    <string name="toast_added_count_to_queue">%1$d cançons afegides a la cua</string>
+    <string name="toast_no_songs_to_queue">Aquesta playlist no té cançons</string>
+    <string name="title_queue">Cua</string>
+    <string name="queue_empty">La cua està buida</string>
+    <string name="queue_hint">Arrossega ≡ per a ordenar · Llisca per a llevar</string>
 </resources>

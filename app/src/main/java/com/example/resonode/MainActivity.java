@@ -71,6 +71,15 @@ import okhttp3.Response;
 
 import android.content.pm.PackageManager;
 
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.drawable.Drawable;
+import androidx.appcompat.content.res.AppCompatResources;
+import androidx.core.graphics.drawable.DrawableCompat;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
+import java.util.Collections;
+
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
 
     private Intent pendingIntentToHandle = null;
@@ -133,6 +142,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private OfflineDB offlineDB;
 
     private MusicItem playlistCoverTarget = null;
+
+    private ImageButton btnQueue;
+    private int currentTintColor = 0xFFF2B327;
+    private final Paint swipePaint = new Paint();
+    private BottomSheetDialog queueDialog;
+    private QueueAdapter queueAdapter;
+    private TextView tvQueueEmpty;
 
     private OkHttpClient createClient() {
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
@@ -281,6 +297,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     });
                 }
             });
+            musicService.setQueueListener(() -> mainHandler.post(MainActivity.this::refreshQueueDialog));
             MusicItem savedSong = musicService.getCurrentSong();
             if (savedSong != null) {
                 updatePlayerUI(savedSong, musicService.isPlaying());
@@ -414,7 +431,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         } catch (Exception e) {
             e.printStackTrace();
             TextView errorView = new TextView(this);
-            errorView.setText("ERROR DE DISENY:\n" + e.getMessage());
+            errorView.setText(getString(R.string.error_layout, e.getMessage()));
             errorView.setTextColor(android.graphics.Color.RED);
             setContentView(errorView);
             return;
@@ -564,6 +581,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                     adapter.setMode(PlaylistAdapter.MODE_PRIVATE);
                                 }
                                 adapter.notifyDataSetChanged();
+                                refreshSharedAddAllButton();
                                 if (isBound && musicService != null && musicService.getCurrentSong() != null) {
                                     adapter.setPlayingState(musicService.getCurrentSong().getPath(), musicService.isPlaying());
                                 }
@@ -853,7 +871,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             TextView tvUser = headerView.findViewById(R.id.tv_header_user);
             ImageView ivProfile = headerView.findViewById(R.id.iv_user_profile);
 
-            if (tvUser != null) tvUser.setText(session.getUsername());
+            if (tvUser != null) {
+                String shownName = session.getUsername();
+                if (isLocalMode && "LocalUser".equals(shownName)) shownName = getString(R.string.label_local_user);
+                tvUser.setText(shownName);
+            }
 
             String profileUri = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
                     .getString("profile_pic_uri", null);
@@ -956,9 +978,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         pickImageLauncher.launch(Intent.createChooser(intent, getString(R.string.chooser_select_cover)));
                     }
                     else if (action.equals(getString(R.string.action_share))) sharePlaylist(item);
+                    else if (action.equals(getString(R.string.action_add_to_queue))) {
+                        if (item.isFolder()) addFolderToQueue(item);
+                        else addSongsToQueue(Collections.singletonList(item), currentOwnerUsername());
+                    }
                 }
         );
 
+        adapter.setQueueEnabled(true);
         adapter.setOnSelectionChangedListener(count -> {
             if (count > 0) {
                 btnSearch.setVisibility(View.GONE);
@@ -978,7 +1005,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     tvToolbarAction.setText(getString(R.string.toolbar_add_count, count));
                 }
             } else {
-                tvToolbarAction.setVisibility(View.GONE);
+                refreshSharedAddAllButton();
                 btnBulkMore.setVisibility(View.GONE);
                 btnSearch.setVisibility(currentPath.isEmpty() && !isSharedPreview && !isOfflineMode() ? View.VISIBLE : View.GONE);
                 if (currentPath.isEmpty() && !isSharedPreview) fabAdd.show();
@@ -986,6 +1013,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         });
 
         recyclerView.setAdapter(adapter);
+        attachSwipeToQueue();
 
         recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
@@ -1013,7 +1041,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         tvToolbarAction.setOnClickListener(v -> {
             List<MusicItem> selected = adapter.getSelectedItems();
-            if (!selected.isEmpty()) {
+            if (isSharedPreview) {
+                List<MusicItem> source = selected.isEmpty() ? musicList : selected;
+                List<MusicItem> toAdd = new ArrayList<>();
+                for (MusicItem m : source) {
+                    if (!m.isFolder()) toAdd.add(m);
+                }
+                if (!toAdd.isEmpty()) showAddToPlaylistDialog(toAdd);
+            } else if (!selected.isEmpty()) {
                 showAddToPlaylistDialog(selected);
             }
         });
@@ -1043,6 +1078,22 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             });
             popup.show();
         });
+    }
+
+    private void refreshSharedAddAllButton() {
+        if (tvToolbarAction == null) return;
+
+        boolean hasSongs = false;
+        for (MusicItem m : musicList) {
+            if (!m.isFolder()) { hasSongs = true; break; }
+        }
+
+        if (isSharedPreview && hasSongs) {
+            tvToolbarAction.setText(getString(R.string.toolbar_add_all));
+            tvToolbarAction.setVisibility(View.VISIBLE);
+        } else if (adapter == null || adapter.getSelectedItems().isEmpty()) {
+            tvToolbarAction.setVisibility(View.GONE);
+        }
     }
 
     private void bulkDeleteItems(List<MusicItem> items) {
@@ -1232,6 +1283,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         btnPrev = findViewById(R.id.btn_prev);
         btnShuffle = findViewById(R.id.btn_shuffle);
         btnRepeat = findViewById(R.id.btn_repeat);
+        btnQueue = findViewById(R.id.btn_queue);
 
         miniSet.clone(playerRoot);
         fullSet.clone(this, R.layout.player_expanded);
@@ -1260,6 +1312,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         btnShuffle.setOnClickListener(v -> { if (isBound) { musicService.toggleShuffle(); updateShuffleUI(); } });
         btnRepeat.setOnClickListener(v -> { if (isBound) { musicService.toggleRepeatOne(); updateRepeatUI(); } });
+        if (btnQueue != null) btnQueue.setOnClickListener(v -> showQueueDialog());
 
         if (btnAddShared != null) {
             btnAddShared.setOnClickListener(v -> {
@@ -1557,6 +1610,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (queueDialog != null) queueDialog.dismiss();
+        if (isBound && musicService != null) musicService.setQueueListener(null);
         if(isBound) unbindService(serviceConnection);
     }
 
@@ -2154,6 +2209,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             case "cyber_red": tintColor = 0xFFFF003C; break;
             default: tintColor = 0xFFF2B327; break;
         }
+        currentTintColor = tintColor;
 
         if (btnAddShared != null) {
             btnAddShared.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
@@ -2548,7 +2604,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
                             adapter.setCurrentPath(currentPath);
                             adapter.setMode(PlaylistAdapter.MODE_SHARED);
-                            updateTitleAndFab("Shared", false);
+                            updateTitleAndFab(getString(R.string.title_shared), false);
 
                             currentSongIndex = 0;
                             playServiceStream(item);
@@ -2601,21 +2657,47 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 }).show();
     }
 
-    private void addSharedSongsToPlaylist(String playlistName, List<MusicItem> s) {
-        JSONObject j=new JSONObject();
-        JSONArray a=new JSONArray();
-        for(MusicItem m:s) { a.put(new File(m.getPath()).getName()); }
-        try{
+    private void addSharedSongsToPlaylist(final String playlistName, List<MusicItem> s) {
+        final JSONObject j = new JSONObject();
+        final JSONArray a = new JSONArray();
+        for (MusicItem m : s) { a.put(new File(m.getPath()).getName()); }
+        try {
             j.put("token", sharedToken);
             j.put("target_username", session.getUsername());
             j.put("target_playlist", playlistName);
             j.put("items", a);
-        }catch(Exception e){}
-        postJson("/share/import_items", j.toString(), () -> {
-            mainHandler.post(() -> {
-                adapter.setSelectionMode(false);
-                Toast.makeText(MainActivity.this, getString(R.string.toast_songs_imported_to, playlistName), Toast.LENGTH_SHORT).show();
-            });
+        } catch (Exception e) {}
+
+        final int total = s.size();
+        executor.execute(() -> {
+            try {
+                RequestBody body = RequestBody.create(MediaType.parse("application/json"), j.toString());
+                Request request = new Request.Builder()
+                        .url(Config.SERVER_URL + "/share/import_items")
+                        .header("x-secret-key", Config.API_SECRET_KEY)
+                        .post(body)
+                        .build();
+                try (Response r = client.newCall(request).execute()) {
+                    final boolean ok = r.isSuccessful();
+                    int added = 0;
+                    if (ok && r.body() != null) {
+                        try { added = new JSONObject(r.body().string()).optInt("added", 0); } catch (Exception ignored) {}
+                    }
+                    final int fAdded = added;
+                    mainHandler.post(() -> {
+                        adapter.setSelectionMode(false);
+                        if (!ok || fAdded == 0) {
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_import_failed), Toast.LENGTH_LONG).show();
+                        } else if (fAdded < total) {
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_import_partial, fAdded, total, playlistName), Toast.LENGTH_LONG).show();
+                        } else {
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_songs_imported_to, playlistName), Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                mainHandler.post(() -> Toast.makeText(MainActivity.this, getString(R.string.error_network), Toast.LENGTH_SHORT).show());
+            }
         });
     }
 
@@ -2672,5 +2754,181 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 e.printStackTrace();
             }
         }
+    }
+
+    private String currentOwnerUsername() {
+        return isSharedPreview ? sharedOwner : session.getUsername();
+    }
+
+    private void addSongsToQueue(List<MusicItem> items, String ownerUsername) {
+        if (!isBound || musicService == null) return;
+        List<MusicItem> songs = new ArrayList<>();
+        for (MusicItem m : items) if (m != null && !m.isFolder()) songs.add(m);
+
+        if (songs.isEmpty()) {
+            Toast.makeText(this, getString(R.string.toast_no_songs_to_queue), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        musicService.addToQueue(songs, ownerUsername);
+
+        String msg = songs.size() == 1
+                ? getString(R.string.toast_added_to_queue)
+                : getString(R.string.toast_added_count_to_queue, songs.size());
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+    }
+
+    private void addFolderToQueue(final MusicItem folder) {
+        if (isOfflineMode()) {
+            if (offlineDB == null) offlineDB = new OfflineDB(this);
+            addSongsToQueue(offlineDB.getSongsInPlaylist(folder.getName()), session.getUsername());
+            return;
+        }
+
+        final String owner = currentOwnerUsername();
+        final boolean includeLocalSongs = !isSharedPreview;
+        final String url = buildServerUrl("/browse", "username", owner, "folder", folder.getPath());
+
+        executor.execute(() -> {
+            try (Response r = client.newCall(new Request.Builder().url(url).build()).execute()) {
+                if (!r.isSuccessful()) throw new Exception("HTTP " + r.code());
+                JSONArray items = new JSONObject(r.body().string()).getJSONArray("items");
+
+                final List<MusicItem> songs = new ArrayList<>();
+                for (int i = 0; i < items.length(); i++) {
+                    JSONObject o = items.getJSONObject(i);
+                    if (!"file".equals(o.getString("type"))) continue;
+                    songs.add(new MusicItem(o.getString("name"), "file", o.getString("path"), o.optString("artist", "")));
+                }
+                // Las canciones locales (content://) que añadiste a esa playlist también entran
+                if (includeLocalSongs) {
+                    for (MusicItem local : offlineDB.getSongsInPlaylist(folder.getName())) {
+                        if (local.getPath().startsWith("content://")) songs.add(local);
+                    }
+                }
+                mainHandler.post(() -> addSongsToQueue(songs, owner));
+            } catch (Exception e) {
+                mainHandler.post(() -> Toast.makeText(MainActivity.this,
+                        getString(R.string.error_loading_playlists), Toast.LENGTH_SHORT).show());
+            }
+        });
+    }
+
+    private void attachSwipeToQueue() {
+        ItemTouchHelper.SimpleCallback swipeCallback = new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.RIGHT) {
+            @Override
+            public boolean onMove(@NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder vh,
+                                  @NonNull RecyclerView.ViewHolder target) {
+                return false;
+            }
+
+            @Override
+            public int getSwipeDirs(@NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder vh) {
+                int pos = vh.getAdapterPosition();
+                if (pos == RecyclerView.NO_POSITION || pos >= musicList.size()) return 0;
+                if (musicList.get(pos).isFolder()) return 0;            // playlists: solo desde ⋮
+                if (!adapter.getSelectedItems().isEmpty()) return 0;    // en modo selección, no
+                return super.getSwipeDirs(rv, vh);
+            }
+
+            @Override
+            public float getSwipeThreshold(@NonNull RecyclerView.ViewHolder vh) { return 0.35f; }
+
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder vh, int direction) {
+                int pos = vh.getAdapterPosition();
+                if (pos == RecyclerView.NO_POSITION || pos >= musicList.size()) return;
+                addSongsToQueue(Collections.singletonList(musicList.get(pos)), currentOwnerUsername());
+                adapter.notifyItemChanged(pos); // devuelve la fila a su sitio
+            }
+
+            @Override
+            public void onChildDraw(@NonNull Canvas c, @NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder vh,
+                                    float dX, float dY, int actionState, boolean isCurrentlyActive) {
+                if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE && dX > 0) {
+                    View row = vh.itemView;
+                    swipePaint.setColor(currentTintColor);
+                    c.drawRect(row.getLeft(), row.getTop(), row.getLeft() + dX, row.getBottom(), swipePaint);
+
+                    int size = (int) (24 * getResources().getDisplayMetrics().density);
+                    Drawable icon = AppCompatResources.getDrawable(MainActivity.this, R.drawable.ic_queue);
+                    if (icon != null && dX > size * 2) {
+                        icon = DrawableCompat.wrap(icon.mutate());
+                        DrawableCompat.setTint(icon, 0xFF000000);
+                        int left = row.getLeft() + size;
+                        int top = row.getTop() + (row.getHeight() - size) / 2;
+                        icon.setBounds(left, top, left + size, top + size);
+                        icon.draw(c);
+                    }
+                }
+                super.onChildDraw(c, rv, vh, dX, dY, actionState, isCurrentlyActive);
+            }
+        };
+        new ItemTouchHelper(swipeCallback).attachToRecyclerView(recyclerView);
+    }
+
+    private void showQueueDialog() {
+        if (!isBound || musicService == null) return;
+
+        View sheet = getLayoutInflater().inflate(R.layout.dialog_queue, null);
+        boolean pureBlack = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE).getBoolean("pure_black", false);
+        sheet.setBackgroundColor(pureBlack ? 0xFF000000 : 0xFF191414);
+
+        RecyclerView rvQueue = sheet.findViewById(R.id.rv_queue);
+        tvQueueEmpty = sheet.findViewById(R.id.tv_queue_empty);
+        rvQueue.setLayoutManager(new LinearLayoutManager(this));
+        queueAdapter = new QueueAdapter(musicService.getQueue());
+        rvQueue.setAdapter(queueAdapter);
+
+        ItemTouchHelper queueHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(
+                ItemTouchHelper.UP | ItemTouchHelper.DOWN,
+                ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
+
+            @Override
+            public boolean isLongPressDragEnabled() { return false; } // solo desde el asa ≡
+
+            @Override
+            public boolean onMove(@NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder from,
+                                  @NonNull RecyclerView.ViewHolder to) {
+                int f = from.getAdapterPosition(), t = to.getAdapterPosition();
+                if (f == RecyclerView.NO_POSITION || t == RecyclerView.NO_POSITION || queueAdapter == null) return false;
+                queueAdapter.moveItem(f, t);
+                if (isBound && musicService != null) musicService.moveInQueue(f, t);
+                return true;
+            }
+
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder vh, int direction) {
+                int pos = vh.getAdapterPosition();
+                if (pos == RecyclerView.NO_POSITION || queueAdapter == null) return;
+                queueAdapter.removeItem(pos);
+                if (isBound && musicService != null) musicService.removeFromQueue(pos);
+                updateQueueEmptyState();
+            }
+        });
+        queueHelper.attachToRecyclerView(rvQueue);
+        queueAdapter.setDragStarter(queueHelper::startDrag);
+
+        queueDialog = new BottomSheetDialog(this);
+        queueDialog.setContentView(sheet);
+        View container = (View) sheet.getParent();
+        if (container != null) container.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        queueDialog.setOnDismissListener(d -> {
+            queueDialog = null;
+            queueAdapter = null;
+            tvQueueEmpty = null;
+        });
+        updateQueueEmptyState();
+        queueDialog.show();
+    }
+
+    private void refreshQueueDialog() {
+        if (queueAdapter == null || !isBound || musicService == null) return;
+        queueAdapter.setItems(musicService.getQueue());
+        updateQueueEmptyState();
+    }
+
+    private void updateQueueEmptyState() {
+        if (tvQueueEmpty == null || queueAdapter == null) return;
+        tvQueueEmpty.setVisibility(queueAdapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
     }
 }

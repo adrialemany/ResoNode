@@ -51,6 +51,8 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
     private final List<MusicItem> selectedItems = new ArrayList<>();
     private OnSelectionChangedListener selectionListener;
     private boolean isSelectionActive = false;
+    private boolean queueEnabled = false;
+    public void setQueueEnabled(boolean enabled) { this.queueEnabled = enabled; }
 
     public interface OnItemClickListener { void onItemClick(MusicItem item); }
     public interface OnItemMenuClickListener { void onMenuClick(MusicItem item, String action); }
@@ -116,7 +118,7 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
         final MusicItem item = items.get(position);
 
         String rawName = item.getName();
-        if (rawName.equals("General")) rawName = context.getString(R.string.label_public_playlists_display);
+        if (rawName.equals("General") || rawName.equals("Playlists Públiques")) rawName = context.getString(R.string.label_public_playlists_display);
         String displayName = item.isFolder() ? rawName : rawName.replace(".mp3", "").replace(".MP3", "").replaceAll("^(\\d+[\\s_\\-]*)+", "");
         holder.tvName.setText(displayName);
 
@@ -265,6 +267,9 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
         if (mode == MODE_VAULT || mode == MODE_PRIVATE || mode == MODE_SEARCH || mode == MODE_PUBLIC) {
             popup.getMenu().add(context.getString(R.string.action_add_to_playlist));
         }
+        if (queueEnabled && !isPublicRootFolder(item)) {
+            popup.getMenu().add(context.getString(R.string.action_add_to_queue));
+        }
         popup.getMenu().add(context.getString(R.string.action_share));
 
         if (item.isFolder()) {
@@ -312,5 +317,10 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
             checkBox = itemView.findViewById(R.id.checkbox_select);
             eqAnim = itemView.findViewById(R.id.eq_anim);
         }
+    }
+    private boolean isPublicRootFolder(MusicItem item) {
+        return item.isFolder() && ("General".equals(item.getName())
+                || "General".equals(item.getPath())
+                || "Playlists Públiques".equals(item.getPath()));
     }
 }

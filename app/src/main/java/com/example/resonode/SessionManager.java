@@ -51,7 +51,7 @@ public class SessionManager {
     }
 
     public String getDeviceModel() {
-        return pref.getString(KEY_DEVICE_MODEL, "Desconegut");
+        return pref.getString(KEY_DEVICE_MODEL, context.getString(R.string.unknown_device));
     }
 
     public void setWrappedEnabled(boolean enabled) {

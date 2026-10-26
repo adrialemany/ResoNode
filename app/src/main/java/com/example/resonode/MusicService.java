@@ -81,13 +81,62 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private File tempFile = null;
-    
+
     private OfflineDB offlineDB;
 
     private boolean isRepeatOne = false;
 
     public void toggleRepeatOne() { this.isRepeatOne = !this.isRepeatOne; }
     public boolean isRepeatOneEnabled() { return isRepeatOne; }
+
+    private static class QueuedSong {
+        final MusicItem item;
+        final String username;
+        QueuedSong(MusicItem item, String username) { this.item = item; this.username = username; }
+    }
+
+    private final List<QueuedSong> queue = new ArrayList<>();
+    private QueuedSong currentQueued = null;   // != null mientras suena una canción sacada de la cola
+    private Runnable queueListener;
+
+    public void setQueueListener(Runnable listener) { this.queueListener = listener; }
+
+    private void notifyQueueChanged() { if (queueListener != null) queueListener.run(); }
+
+    public void addToQueue(List<MusicItem> items, String username) {
+        for (MusicItem m : items) {
+            if (m != null && !m.isFolder()) queue.add(new QueuedSong(m, username));
+        }
+        notifyQueueChanged();
+        saveState();
+        if (getCurrentSong() == null) playNext(); // si no sonaba nada, empieza por la cola
+    }
+
+    public List<MusicItem> getQueue() {
+        List<MusicItem> copy = new ArrayList<>();
+        for (QueuedSong q : queue) copy.add(q.item);
+        return copy;
+    }
+
+    public void removeFromQueue(int position) {
+        if (position < 0 || position >= queue.size()) return;
+        queue.remove(position);
+        saveState();
+    }
+
+    public void moveInQueue(int from, int to) {
+        if (from < 0 || to < 0 || from >= queue.size() || to >= queue.size()) return;
+        queue.add(to, queue.remove(from));
+        saveState();
+    }
+
+    private String currentStreamUser() {
+        return (currentQueued != null && currentQueued.username != null) ? currentQueued.username : currentUsername;
+    }
+    private String tr(int resId, Object... args) {
+        Context localized = LocaleHelper.onAttach(getApplicationContext());
+        return args.length == 0 ? localized.getString(resId) : localized.getString(resId, args);
+    }
 
     private OkHttpClient createClient() {
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
@@ -140,7 +189,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
         super.onCreate();
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
 
-        
+
         offlineDB = new OfflineDB(this);
 
         createNotificationChannel();
@@ -161,8 +210,8 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
-                        .setContentTitle("ResoNode")
-                        .setContentText("Servei actiu")
+                        .setContentTitle(tr(R.string.app_name))
+                        .setContentText(tr(R.string.notif_service_active))
                         .setSmallIcon(R.drawable.ic_notification)
                         .setPriority(NotificationCompat.PRIORITY_MIN)
                         .build();
@@ -186,8 +235,9 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
 
                 updateNotification();
                 saveState();
-                if (callback != null && currentIndex != -1 && currentIndex < playlist.size()) {
-                    callback.onSongChanged(playlist.get(currentIndex), true);
+                MusicItem nowPlaying = getCurrentSong();
+                if (callback != null && nowPlaying != null) {
+                    callback.onSongChanged(nowPlaying, true);
                     callback.onPlaybackStateChanged(true);
                 }
             }
@@ -243,14 +293,13 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
         failureCount++;
         if (failureCount < MAX_RETRIES) {
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                if (currentIndex != -1 && !playlist.isEmpty()) {
-                    playInternal(playlist.get(currentIndex));
-                }
+                MusicItem retry = getCurrentSong();
+                if (retry != null) playInternal(retry);
             }, 1500);
         } else {
             failureCount = 0;
             new Handler(Looper.getMainLooper()).post(() -> {
-                Toast.makeText(getApplicationContext(), "Error reproducció", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getApplicationContext(), tr(R.string.error_play_failed), Toast.LENGTH_SHORT).show();
                 playNext();
             });
             if (callback != null) callback.onPlaybackStateChanged(false);
@@ -333,17 +382,18 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
 
     public void playUrl(String url, List<MusicItem> list, int index, String username) {
         this.failureCount = 0;
+        this.currentQueued = null;
         this.playlist = new ArrayList<>(list);
         this.currentIndex = index;
         this.currentUsername = username;
 
-        
+
         if (currentIndex >= 0 && currentIndex < playlist.size()) {
             playInternal(playlist.get(currentIndex));
         }
     }
 
-    
+
     private void playInternal(MusicItem item) {
         try {
             String urlToPlay = "";
@@ -354,35 +404,35 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
                 urlToPlay = item.getPath();
                 isLocal = true;
             }
-            
+
             else {
-                
+
                 boolean hasInternet = NetworkReceiver.isConnected(getApplicationContext());
 
-                
+
                 String localPath = findLocalPath(item);
 
                 if (!hasInternet) {
-                    
+
                     if (localPath != null) {
                         urlToPlay = localPath;
                         isLocal = true;
                     } else {
-                        
-                        Toast.makeText(getApplicationContext(), "No disponible offline", Toast.LENGTH_SHORT).show();
+
+                        Toast.makeText(getApplicationContext(), tr(R.string.toast_not_available_offline), Toast.LENGTH_SHORT).show();
                         handlePlaybackError();
                         return;
                     }
                 } else {
-                    
-                    
-                    
+
+
+
                     String encodedPath = URLEncoder.encode(item.getPath(), "UTF-8");
-                    urlToPlay = Config.SERVER_URL + "/stream?username=" + currentUsername + "&path=" + encodedPath;
+                    urlToPlay = Config.SERVER_URL + "/stream?username=" + currentStreamUser() + "&path=" + encodedPath;
                 }
             }
 
-            
+
             requestAudioFocusAndPlay(urlToPlay, item, isLocal);
 
         } catch(Exception e){
@@ -390,18 +440,18 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
         }
     }
 
-    
+
     private String findLocalPath(MusicItem item) {
         if (offlineDB == null) return null;
         try {
-            
+
             List<MusicItem> playlists = offlineDB.getOfflinePlaylists();
             for (MusicItem pl : playlists) {
                 List<MusicItem> songs = offlineDB.getSongsInPlaylist(pl.getName());
                 for (MusicItem s : songs) {
-                    
+
                     if (s.getPath().equals(item.getPath()) || s.getName().equals(item.getName())) {
-                        File f = new File(s.getPath()); 
+                        File f = new File(s.getPath());
                         if (f.exists()) return s.getPath();
                     }
                 }
@@ -425,16 +475,16 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
                 } else {
                     mediaPlayer.setDataSource(url);
                 }
-                
+
                 mediaPlayer.setOnErrorListener(new MediaPlayer.OnErrorListener() {
                     @Override
                     public boolean onError(MediaPlayer mp, int what, int extra) {
-                        
+
                         if (!isLocalFile) {
                             String localPath = findLocalPath(originalItem);
                             if (localPath != null) {
                                 requestAudioFocusAndPlay(localPath, originalItem, true);
-                                return true; 
+                                return true;
                             }
                         }
                         handlePlaybackError();
@@ -445,7 +495,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
                 mediaPlayer.prepareAsync();
 
             } catch (Exception e) {
-                
+
                 if (!isLocalFile) {
                     String localPath = findLocalPath(originalItem);
                     if (localPath != null) {
@@ -483,6 +533,13 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
     }
 
     public void playNext() {
+        if (!queue.isEmpty()) {
+            currentQueued = queue.remove(0);
+            notifyQueueChanged();
+            playInternal(currentQueued.item);
+            return;
+        }
+        currentQueued = null;
         if (playlist.isEmpty()) return;
 
         int nextIndex;
@@ -508,6 +565,11 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
 
     public void playPrev() {
         failureCount = 0;
+        if (currentQueued != null) {
+            currentQueued = null;
+            if (currentIndex >= 0 && currentIndex < playlist.size()) playInternal(playlist.get(currentIndex));
+            return;
+        }
         if (playlist.isEmpty()) return;
         int prevIndex = (currentIndex - 1 + playlist.size()) % playlist.size();
         MusicItem prevItem = playlist.get(prevIndex);
@@ -528,6 +590,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
         final int savePos = (mediaPlayer != null) ? mediaPlayer.getCurrentPosition() : 0;
         final String saveUser = currentUsername;
         final List<MusicItem> saveList = new ArrayList<>(playlist);
+        final List<QueuedSong> saveQueue = new ArrayList<>(queue);
 
         new Thread(new Runnable() {
             @Override
@@ -550,6 +613,19 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
                         } catch (Exception e) {}
                     }
                     editor.putString("last_playlist", jsonArray.toString());
+                    JSONArray queueArray = new JSONArray();
+                    for (QueuedSong q : saveQueue) {
+                        JSONObject obj = new JSONObject();
+                        try {
+                            obj.put("name", q.item.getName());
+                            obj.put("type", q.item.getType());
+                            obj.put("path", q.item.getPath());
+                            obj.put("artist", q.item.getArtist());
+                            obj.put("username", q.username);
+                            queueArray.put(obj);
+                        } catch (Exception e) {}
+                    }
+                    editor.putString("last_queue", queueArray.toString());
                     editor.apply();
                 } catch (Exception e) {}
             }
@@ -571,6 +647,19 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
                 currentUsername = prefs.getString("last_username", "");
             } catch (Exception e) {}
         }
+        String queueJson = prefs.getString("last_queue", null);
+        if (queueJson != null) {
+            try {
+                JSONArray arr = new JSONArray(queueJson);
+                queue.clear();
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject obj = arr.getJSONObject(i);
+                    MusicItem m = new MusicItem(obj.getString("name"), obj.getString("type"),
+                            obj.getString("path"), obj.optString("artist", ""));
+                    queue.add(new QueuedSong(m, obj.optString("username", currentUsername)));
+                }
+            } catch (Exception e) {}
+        }
     }
 
     public boolean isPlaying() { return mediaPlayer != null && mediaPlayer.isPlaying(); }
@@ -582,33 +671,36 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
             mediaPlayer.seekTo(pos);
         }
     }
-    public MusicItem getCurrentSong() { return (currentIndex != -1 && !playlist.isEmpty()) ? playlist.get(currentIndex) : null; }
+    public MusicItem getCurrentSong() {
+        if (currentQueued != null) return currentQueued.item;
+        return (currentIndex >= 0 && currentIndex < playlist.size()) ? playlist.get(currentIndex) : null;
+    }
     public void setCallback(OnSongChangedListener callback) { this.callback = callback; }
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "ResoNode Player", NotificationManager.IMPORTANCE_LOW);
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, tr(R.string.channel_player_name), NotificationManager.IMPORTANCE_LOW);
             channel.setSound(null, null);
             getSystemService(NotificationManager.class).createNotificationChannel(channel);
         }
     }
 
     private void updateNotification() {
-        if (currentIndex == -1 || playlist.isEmpty()) return;
-        final MusicItem item = playlist.get(currentIndex);
+        final MusicItem item = getCurrentSong();
+        if (item == null) return;
 
         String artUrl = "";
         File localCover = null;
 
-        
+
         if (item.getPath().startsWith("/")) {
-            
+
             if (offlineDB != null) {
                 String originalPath = offlineDB.getServerPathForLocalFile(item.getPath());
                 if (originalPath != null) {
-                    try { artUrl = Config.SERVER_URL + "/cover?username=" + currentUsername + "&path=" + URLEncoder.encode(originalPath, "UTF-8"); } catch (Exception e) {}
+                    try { artUrl = Config.SERVER_URL + "/cover?username=" + currentStreamUser() + "&path=" + URLEncoder.encode(originalPath, "UTF-8"); } catch (Exception e) {}
                 }
-                
+
                 List<MusicItem> playlists = offlineDB.getOfflinePlaylists();
                 for(MusicItem pl : playlists) {
                     List<MusicItem> songs = offlineDB.getSongsInPlaylist(pl.getName());
@@ -623,7 +715,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
                 }
             }
         } else {
-            try { artUrl = Config.SERVER_URL + "/cover?username=" + currentUsername + "&path=" + URLEncoder.encode(item.getPath(), "UTF-8"); } catch (Exception e) {}
+            try { artUrl = Config.SERVER_URL + "/cover?username=" + currentStreamUser() + "&path=" + URLEncoder.encode(item.getPath(), "UTF-8"); } catch (Exception e) {}
         }
 
         final Bitmap defaultIcon = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
@@ -632,7 +724,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
         Glide.with(this)
                 .asBitmap()
                 .load(artUrl)
-                .error(Glide.with(this).asBitmap().load(finalLocalCover)) 
+                .error(Glide.with(this).asBitmap().load(finalLocalCover))
                 .placeholder(R.mipmap.ic_launcher)
                 .into(new CustomTarget<Bitmap>() {
                     @Override
@@ -655,7 +747,7 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
                 .replaceAll("^(\\d+[\\s_\\-]*)+", "");
 
         String artistName = item.getArtist();
-        if (artistName == null || artistName.isEmpty()) artistName = "ResoNode Music";
+        if (artistName == null || artistName.isEmpty()) artistName = tr(R.string.artist_resonode_music);
 
         Intent openAppIntent = new Intent(this, MainActivity.class);
         openAppIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -699,10 +791,10 @@ public class MusicService extends Service implements AudioManager.OnAudioFocusCh
                 .setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
                         .setMediaSession(mediaSession.getSessionToken())
                         .setShowActionsInCompactView(0, 1, 2))
-                .addAction(android.R.drawable.ic_media_previous, "Prev", pPrev)
-                .addAction(playIcon, "Play", pPlay)
-                .addAction(android.R.drawable.ic_media_next, "Next", pNext)
-                .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Close", pClose)
+                .addAction(android.R.drawable.ic_media_previous, tr(R.string.notif_action_prev), pPrev)
+                .addAction(playIcon, mediaPlayer.isPlaying() ? tr(R.string.notif_action_pause) : tr(R.string.notif_action_play), pPlay)
+                .addAction(android.R.drawable.ic_media_next, tr(R.string.notif_action_next), pNext)
+                .addAction(android.R.drawable.ic_menu_close_clear_cancel, tr(R.string.notif_action_close), pClose)
                 .setOngoing(mediaPlayer.isPlaying());
 
         startForeground(NOTIFICATION_ID, notification.build());
