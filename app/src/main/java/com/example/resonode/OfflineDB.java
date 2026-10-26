@@ -313,4 +313,14 @@ public class OfflineDB extends SQLiteOpenHelper {
 
         return result;
     }
+
+    public void renameLocalSongsPlaylist(String oldName, String newName) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(KEY_PLAYLIST, newName);
+        db.update(TABLE_SONGS, values,
+                KEY_PLAYLIST + " = ? AND " + KEY_FILE_PATH + " LIKE 'content://%'",
+                new String[]{oldName});
+        db.close();
+    }
 }

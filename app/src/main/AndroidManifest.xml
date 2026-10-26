@@ -74,6 +74,10 @@
         <activity android:name=".SettingsActivity"
             android:theme="@style/Theme.ResoNode"/>
 
+        <activity android:name=".EditPlaylistActivity"
+            android:theme="@style/Theme.ResoNode"
+            android:exported="false" />
+
         <activity android:name=".WrappedActivity"
             android:theme="@style/Theme.AppCompat.NoActionBar"
             android:exported="false"/>

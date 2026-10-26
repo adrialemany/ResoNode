@@ -292,4 +292,17 @@
 
     <string name="label_profile_photo">Profile photo</string>
     <string name="toast_profile_pic_error">Could not save the photo</string>
+
+    <!-- Editar playlist -->
+    <string name="action_edit_playlist">Edit playlist</string>
+    <string name="title_edit_playlist">Edit playlist</string>
+    <string name="section_songs">SONGS</string>
+    <string name="hint_drag_to_reorder">Drag ≡ to reorder</string>
+    <string name="action_save">Save</string>
+    <string name="title_discard_changes">Discard changes?</string>
+    <string name="msg_discard_changes">Are you sure you want to cancel? Your changes will not be saved.</string>
+    <string name="progress_saving_playlist">Saving playlist…</string>
+    <string name="toast_playlist_saved">Playlist saved</string>
+    <string name="toast_playlist_save_error">Could not save: %1$s</string>
+    <string name="toast_edit_needs_connection">You need a connection to edit the playlist</string>
 </resources>

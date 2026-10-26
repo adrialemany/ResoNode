@@ -291,4 +291,17 @@
 
     <string name="label_profile_photo">Foto de perfil</string>
     <string name="toast_profile_pic_error">No s\'ha pogut guardar la foto</string>
+
+    <!-- Editar playlist -->
+    <string name="action_edit_playlist">Editar playlist</string>
+    <string name="title_edit_playlist">Editar playlist</string>
+    <string name="section_songs">CANÇONS</string>
+    <string name="hint_drag_to_reorder">Arrossega ≡ per a ordenar</string>
+    <string name="action_save">Guardar</string>
+    <string name="title_discard_changes">Descartar els canvis?</string>
+    <string name="msg_discard_changes">Segur que vols cancel·lar? Els canvis no es guardaran.</string>
+    <string name="progress_saving_playlist">Guardant playlist…</string>
+    <string name="toast_playlist_saved">Playlist guardada</string>
+    <string name="toast_playlist_save_error">No s\'ha pogut guardar: %1$s</string>
+    <string name="toast_edit_needs_connection">Necessites connexió per a editar la playlist</string>
 </resources>

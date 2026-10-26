@@ -243,6 +243,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         }
                     }
 
+                    PlaylistOrder.sortNames(pList);
+
                     mainHandler.post(() -> {
                         if (pList.isEmpty()) {
                             Toast.makeText(MainActivity.this, getString(R.string.msg_create_playlist_first), Toast.LENGTH_LONG).show();
@@ -337,6 +339,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                             showPlaylistSelectorForVaultItem(searchItem);
                         }
                     }
+                }
+            }
+    );
+
+    private final ActivityResultLauncher<Intent> editPlaylistLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK) {
+                    try { Glide.get(MainActivity.this).clearMemory(); } catch (Exception ignored) {}
+                    fetchMusicContent(Config.SERVER_URL, currentPath);
                 }
             }
     );
@@ -535,6 +547,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
                     boolean isVault = json.optBoolean("is_vault", false);
                     JSONArray items = json.getJSONArray("items");
+                    final JSONArray order = json.optJSONArray("order");
 
                     final List<MusicItem> temp = new ArrayList<>();
                     boolean foundFolders = false;
@@ -563,6 +576,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                         if (os.getPath().startsWith("content://")) temp.add(os);
                                     }
                                 }
+                                PlaylistOrder.sort(temp, order);
+                                PlaylistOrder.sortFoldersByName(temp);
                                 musicList.clear();
                                 musicList.addAll(temp);
                                 updateTitleAndFab(currentPath, finalIsVault);
@@ -685,6 +700,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         if (folderPath.isEmpty()) {
             offlineItems.addAll(offlineDB.getOfflinePlaylists());
+            PlaylistOrder.sortFoldersByName(offlineItems);
             currentPath = "";
             displayTitle = getString(R.string.title_offline_mode);
         } else {
@@ -974,6 +990,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     else if (action.equals(getString(R.string.action_add_to_playlist))) showPlaylistSelectorForVaultItem(item);
                     else if (action.equals(getString(R.string.action_download_offline))) downloadPlaylist(item);
                     else if (action.equals(getString(R.string.action_delete_offline))) deleteOfflinePlaylist(item);
+                    else if (action.equals(getString(R.string.action_edit_playlist))) openEditPlaylist(item);
                     else if (action.equals(getString(R.string.action_change_cover))) {
                         playlistCoverTarget = item;
                         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
@@ -1666,6 +1683,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (offlineDB == null) offlineDB = new OfflineDB(this);
         final List<String> pList = new ArrayList<>();
         for (MusicItem p : offlineDB.getOfflinePlaylists()) pList.add(p.getName());
+        PlaylistOrder.sortNames(pList);
 
         if (pList.isEmpty()) {
             Toast.makeText(this, getString(R.string.msg_create_playlist_first), Toast.LENGTH_LONG).show();
@@ -1749,6 +1767,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         l.add(getString(R.string.item_new_ellipsis));
 
                         for(int x=0;x<a.length();x++) if(a.getJSONObject(x).getString("type").equals("folder")) l.add(a.getJSONObject(x).getString("name"));
+                        PlaylistOrder.sortNames(l.subList(1, l.size()));
                         mainHandler.post(new Runnable() {
                             @Override public void run() {
                                 new AlertDialog.Builder(MainActivity.this).setItems(l.toArray(new String[0]), new DialogInterface.OnClickListener() {
@@ -1824,6 +1843,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         final List<String> n=new ArrayList<>();
                         n.add(getString(R.string.item_new_ellipsis));
                         for(int x=0;x<a.length();x++) if(a.getJSONObject(x).getString("type").equals("folder")) n.add(a.getJSONObject(x).getString("name"));
+                        PlaylistOrder.sortNames(n.subList(1, n.size()));
                         mainHandler.post(new Runnable() {
                             @Override public void run() {
                                 new AlertDialog.Builder(MainActivity.this).setItems(n.toArray(new String[0]), new DialogInterface.OnClickListener() {
@@ -2461,6 +2481,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                             }
                         }
 
+                        PlaylistOrder.sortNames(pList);
+
                         mainHandler.post(new Runnable() {
                             @Override public void run() {
                                 if (pList.isEmpty()) {
@@ -2638,6 +2660,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                     final List<String> n=new ArrayList<>();
                     n.add(getString(R.string.item_new_ellipsis));
                     for(int x=0;x<a.length();x++) if(a.getJSONObject(x).getString("type").equals("folder")) n.add(a.getJSONObject(x).getString("name"));
+                    PlaylistOrder.sortNames(n.subList(1, n.size()));
                     mainHandler.post(() -> {
                         new AlertDialog.Builder(MainActivity.this).setItems(n.toArray(new String[0]), (d, w) -> {
                             if(w==0) showCreatePlaylistForSharedAddDialog(l);
@@ -2795,7 +2818,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         executor.execute(() -> {
             try (Response r = client.newCall(new Request.Builder().url(url).build()).execute()) {
                 if (!r.isSuccessful()) throw new Exception("HTTP " + r.code());
-                JSONArray items = new JSONObject(r.body().string()).getJSONArray("items");
+                JSONObject json = new JSONObject(r.body().string());
+                JSONArray items = json.getJSONArray("items");
 
                 final List<MusicItem> songs = new ArrayList<>();
                 for (int i = 0; i < items.length(); i++) {
@@ -2809,6 +2833,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                         if (local.getPath().startsWith("content://")) songs.add(local);
                     }
                 }
+                PlaylistOrder.sort(songs, json.optJSONArray("order"));
                 mainHandler.post(() -> addSongsToQueue(songs, owner));
             } catch (Exception e) {
                 mainHandler.post(() -> Toast.makeText(MainActivity.this,
@@ -2960,5 +2985,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (iv != null && uri != null) {
             Glide.with(this).load(Uri.parse(uri)).placeholder(R.mipmap.ic_launcher).centerCrop().into(iv);
         }
+    }
+
+    private void openEditPlaylist(MusicItem playlist) {
+        if (isOfflineMode()) {
+            Toast.makeText(this, getString(R.string.toast_edit_needs_connection), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = new Intent(this, EditPlaylistActivity.class);
+        intent.putExtra(EditPlaylistActivity.EXTRA_NAME, playlist.getName());
+        intent.putExtra(EditPlaylistActivity.EXTRA_PATH, playlist.getPath());
+        editPlaylistLauncher.launch(intent);
     }
 }

@@ -283,9 +283,8 @@ public class PlaylistAdapter extends RecyclerView.Adapter<PlaylistAdapter.ViewHo
         }
 
         if (mode == MODE_PRIVATE) {
-            if (currentPath.isEmpty() || item.isFolder()) {
-                popup.getMenu().add(context.getString(R.string.action_change_cover));
-                popup.getMenu().add(context.getString(R.string.action_rename));
+            if (item.isFolder() && currentPath.isEmpty() && !isPublicRootFolder(item)) {
+                popup.getMenu().add(context.getString(R.string.action_edit_playlist));
             }
             popup.getMenu().add(context.getString(R.string.action_delete));
         }

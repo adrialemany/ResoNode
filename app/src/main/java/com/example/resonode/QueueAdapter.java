@@ -20,6 +20,8 @@ public class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHolder> 
     public interface DragStarter { void startDrag(RecyclerView.ViewHolder holder); }
 
     private final List<MusicItem> items = new ArrayList<>();
+
+    public List<MusicItem> getItems() { return new ArrayList<>(items); }
     private DragStarter dragStarter;
 
     public QueueAdapter(List<MusicItem> initial) {
