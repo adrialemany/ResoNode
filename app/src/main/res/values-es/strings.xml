@@ -304,4 +304,6 @@
     <string name="toast_playlist_saved">Playlist guardada</string>
     <string name="toast_playlist_save_error">No se ha podido guardar: %1$s</string>
     <string name="toast_edit_needs_connection">Necesitas conexión para editar la playlist</string>
+
+    <string name="msg_old_package_detected">Todavía tienes instalada una versión antigua de ResoNode. Desinstálala para no tener la app dos veces. Revisa la personalización y el Wrapped en Configuración. Tendrás que volver a descargar la música offline.</string>
 </resources>

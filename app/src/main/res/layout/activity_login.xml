@@ -7,7 +7,7 @@
     android:layout_height="match_parent"
     android:padding="16dp"
     android:background="#121212"
-    tools:context=".LoginActivity">
+    tools:context="dev.adrialemany.resonode.LoginActivity">
 
     <TextView
         android:id="@+id/tv_title"

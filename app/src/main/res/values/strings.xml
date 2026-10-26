@@ -305,4 +305,6 @@
     <string name="toast_playlist_saved">Playlist saved</string>
     <string name="toast_playlist_save_error">Could not save: %1$s</string>
     <string name="toast_edit_needs_connection">You need a connection to edit the playlist</string>
+
+    <string name="msg_old_package_detected">An old version of ResoNode is still installed. Uninstall it so you don\'t have the app twice. Check your personalization and ResoNode Wrapped in Settings. You will need to download your offline music again.</string>
 </resources>

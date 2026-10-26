@@ -1,0 +1,2997 @@
+package dev.adrialemany.resonode;
+
+import android.app.AlertDialog;
+import android.app.ProgressDialog;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.ServiceConnection;
+import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.Looper;
+import android.provider.Settings;
+import android.view.MenuItem;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.SeekBar;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.ActionBarDrawerToggle;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
+import androidx.appcompat.widget.Toolbar;
+import androidx.core.content.FileProvider;
+import androidx.core.view.GravityCompat;
+import androidx.drawerlayout.widget.DrawerLayout;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.navigation.NavigationView;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import okhttp3.Interceptor;
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+import android.content.pm.PackageManager;
+
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.drawable.Drawable;
+import androidx.appcompat.content.res.AppCompatResources;
+import androidx.core.graphics.drawable.DrawableCompat;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
+import java.util.Collections;
+
+public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
+
+    private Intent pendingIntentToHandle = null;
+
+    static {
+        AppCompatDelegate.setCompatVectorFromResourcesEnabled(true);
+    }
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase));
+    }
+
+    private DrawerLayout drawerLayout;
+    private ImageButton btnShuffle, btnRepeat;
+    private ImageButton btnSearch, btnBulkMore;
+
+    private int playIconRes = android.R.drawable.ic_media_play;
+    private int pauseIconRes = android.R.drawable.ic_media_pause;
+    private NetworkReceiver networkReceiver;
+    private RecyclerView recyclerView;
+    private TextView tvStatus, tvToolbarAction;
+    private FloatingActionButton fabAdd;
+    private SwipeRefreshLayout swipeRefresh;
+    private ImageView ivPlaylistHeader;
+
+    private ImageButton btnAddShared;
+
+    private androidx.constraintlayout.widget.ConstraintLayout playerRoot;
+    private TextView tvTitle, tvArtist, tvCurrentTime, tvTotalTime;
+    private ImageButton btnPlay, btnNext, btnPrev, btnClosePlayer;
+    private ImageView ivCover;
+    private SeekBar seekBar;
+    private boolean isPlayerExpanded = false;
+    private Boolean lastKnownConnectionState = null;
+    private androidx.constraintlayout.widget.ConstraintSet miniSet = new androidx.constraintlayout.widget.ConstraintSet();
+    private androidx.constraintlayout.widget.ConstraintSet fullSet = new androidx.constraintlayout.widget.ConstraintSet();
+    private SessionManager session;
+    private PlaylistAdapter adapter;
+    private List<MusicItem> musicList = new ArrayList<>();
+    private String currentPath = "";
+    private int currentSongIndex = -1;
+    private int currentVersionCode = 0;
+    private boolean isSharedPreview = false;
+    private String sharedOwner = "";
+    private String sharedToken = "";
+
+    private MusicService musicService;
+    private boolean isBound = false;
+    private boolean isRetryingConnection = false;
+    private boolean isConfirmedOffline = false;
+    private boolean isLocalMode = false;
+    private boolean isShuffle = false;
+    private boolean needsUrlRefresh = false;
+    private Handler seekBarHandler = new Handler();
+
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private Handler retryHandler = new Handler(Looper.getMainLooper());
+    private Runnable retryRunnable;
+    private OfflineDB offlineDB;
+
+    private MusicItem playlistCoverTarget = null;
+
+    private ImageButton btnQueue;
+    private int currentTintColor = 0xFFF2B327;
+    private final Paint swipePaint = new Paint();
+    private BottomSheetDialog queueDialog;
+    private QueueAdapter queueAdapter;
+    private TextView tvQueueEmpty;
+
+    private boolean settingsPulled = false;
+
+    private OkHttpClient createClient() {
+        OkHttpClient.Builder builder = new OkHttpClient.Builder()
+                .connectTimeout(6, TimeUnit.SECONDS)
+                .readTimeout(6, TimeUnit.SECONDS)
+                .retryOnConnectionFailure(true)
+                .dns(hostname -> {
+                    List<java.net.InetAddress> addresses = okhttp3.Dns.SYSTEM.lookup(hostname);
+                    List<java.net.InetAddress> ipv4First = new ArrayList<>();
+                    for (java.net.InetAddress addr : addresses) {
+                        if (addr instanceof java.net.Inet4Address) {
+                            ipv4First.add(0, addr);
+                        } else {
+                            ipv4First.add(addr);
+                        }
+                    }
+                    return ipv4First;
+                })
+                .addInterceptor(new Interceptor() {
+                    @Override
+                    public Response intercept(Chain chain) throws IOException {
+                        Request original = chain.request();
+                        Request request = original.newBuilder()
+                                .header("x-secret-key", Config.API_SECRET_KEY)
+                                .method(original.method(), original.body())
+                                .build();
+                        return chain.proceed(request);
+                    }
+                });
+        return Tls12SocketFactory.enableTls12OnPreLollipop(builder).build();
+    }
+    private final OkHttpClient client = createClient();
+
+    private final ActivityResultLauncher<Intent> pickImageLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            new ActivityResultCallback<ActivityResult>() {
+                @Override
+                public void onActivityResult(ActivityResult result) {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null && playlistCoverTarget != null) {
+                        Uri imageUri = result.getData().getData();
+                        if (imageUri != null) {
+                            uploadCoverImage(imageUri, playlistCoverTarget);
+                        }
+                    }
+                }
+            }
+    );
+
+    private final ActivityResultLauncher<Intent> pickLocalSongLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    Intent data = result.getData();
+                    List<Uri> audioUris = new ArrayList<>();
+
+                    if (data.getClipData() != null) {
+                        int count = data.getClipData().getItemCount();
+                        for (int i = 0; i < count; i++) {
+                            audioUris.add(data.getClipData().getItemAt(i).getUri());
+                        }
+                    }
+                    else if (data.getData() != null) {
+                        audioUris.add(data.getData());
+                    }
+
+                    if (!audioUris.isEmpty()) {
+                        for (Uri uri : audioUris) {
+                            try {
+                                getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                            } catch (Exception e) {}
+                        }
+
+                        showPlaylistSelectorForMultipleLocalSongs(audioUris);
+                    }
+                }
+            }
+    );
+
+    private void showPlaylistSelectorForMultipleLocalSongs(final List<Uri> audioUris) {
+        if (isOfflineMode()) { showOfflinePlaylistSelectorForLocalSongs(audioUris); return; }
+        executor.execute(() -> {
+            try {
+                Response r = client.newCall(new Request.Builder().url(Config.SERVER_URL + "/browse?username=" + session.getUsername() + "&folder=").build()).execute();
+                if(r.isSuccessful()) {
+                    JSONArray a = new JSONObject(r.body().string()).getJSONArray("items");
+                    final List<String> pList = new ArrayList<>();
+                    for (int x = 0; x < a.length(); x++) {
+                        if (a.getJSONObject(x).getString("type").equals("folder")) {
+                            pList.add(a.getJSONObject(x).getString("name"));
+                        }
+                    }
+
+                    PlaylistOrder.sortNames(pList);
+
+                    mainHandler.post(() -> {
+                        if (pList.isEmpty()) {
+                            Toast.makeText(MainActivity.this, getString(R.string.msg_create_playlist_first), Toast.LENGTH_LONG).show();
+                            return;
+                        }
+
+                        new AlertDialog.Builder(MainActivity.this)
+                                .setTitle(getString(R.string.title_add_songs_count, audioUris.size()))
+                                .setItems(pList.toArray(new String[0]), (d, w) -> {
+                                    String selectedPlaylist = pList.get(w);
+
+                                    for (Uri uri : audioUris) {
+                                        String[] meta = getAudioMetadata(uri);
+                                        String title = meta[0];
+                                        String artist = meta[1];
+
+                                        offlineDB.saveSong(uri.toString(), title, selectedPlaylist, uri.toString(), artist);
+                                    }
+
+                                    Toast.makeText(MainActivity.this, getString(R.string.toast_songs_added_count, audioUris.size(), selectedPlaylist), Toast.LENGTH_SHORT).show();
+
+                                    if (currentPath.equals(selectedPlaylist)) {
+                                        fetchMusicContent(Config.SERVER_URL, currentPath);
+                                    }
+                                }).show();
+                    });
+                }
+            } catch(Exception e) {
+                mainHandler.post(() -> Toast.makeText(MainActivity.this, getString(R.string.error_loading_playlists), Toast.LENGTH_SHORT).show());
+            }
+        });
+    }
+
+    private final ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            MusicService.LocalBinder binder = (MusicService.LocalBinder) service;
+            musicService = binder.getService();
+            isBound = true;
+            updateShuffleUI();
+            updateRepeatUI();
+            musicService.setCallback(new MusicService.OnSongChangedListener() {
+                @Override public void onSongChanged(final MusicItem song, final boolean isPlaying) {
+                    mainHandler.post(new Runnable() {
+                        @Override public void run() { updatePlayerUI(song, isPlaying);
+                            if (adapter != null && song != null) adapter.setPlayingState(song.getPath(), isPlaying);}
+                    });
+                }
+                @Override public void onPlaybackStateChanged(final boolean isPlaying) {
+                    mainHandler.post(new Runnable() {
+                        @Override public void run() { updatePlayIcons(isPlaying);
+                            if (adapter != null && musicService != null && musicService.getCurrentSong() != null) {
+                                adapter.setPlayingState(musicService.getCurrentSong().getPath(), isPlaying);}}
+                    });
+                }
+            });
+            musicService.setQueueListener(() -> mainHandler.post(MainActivity.this::refreshQueueDialog));
+            MusicItem savedSong = musicService.getCurrentSong();
+            if (savedSong != null) {
+                updatePlayerUI(savedSong, musicService.isPlaying());
+                if (!musicService.isPlaying()) updatePlayIcons(false);
+                if (adapter != null) {
+                    adapter.setPlayingState(savedSong.getPath(), musicService.isPlaying());
+                }
+                isPlayerExpanded = false;
+                miniSet.applyTo(playerRoot);
+            }
+
+            handlePendingIntent();
+        }
+        @Override public void onServiceDisconnected(ComponentName name) { isBound = false; }
+    };
+
+    private final ActivityResultLauncher<Intent> searchLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            new ActivityResultCallback<ActivityResult>() {
+                @Override
+                public void onActivityResult(ActivityResult result) {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        Intent data = result.getData();
+                        String action = data.getStringExtra("action");
+                        if ("navigate".equals(action)) {
+                            String path = data.getStringExtra("path");
+                            final String songToPlay = data.getStringExtra("play_song");
+                            fetchMusicContent(Config.SERVER_URL, path);
+                            if (songToPlay != null) mainHandler.postDelayed(new Runnable() {
+                                @Override public void run() { playSongByName(songToPlay); }
+                            }, 1000);
+                        } else if ("add_to_playlist".equals(action)) {
+                            String pathId = data.getStringExtra("path_id");
+                            MusicItem searchItem = new MusicItem("Cerca", "file", pathId);
+                            showPlaylistSelectorForVaultItem(searchItem);
+                        }
+                    }
+                }
+            }
+    );
+
+    private final ActivityResultLauncher<Intent> editPlaylistLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK) {
+                    try { Glide.get(MainActivity.this).clearMemory(); } catch (Exception ignored) {}
+                    fetchMusicContent(Config.SERVER_URL, currentPath);
+                }
+            }
+    );
+
+    private File pendingApkFile = null;
+    private final ActivityResultLauncher<Intent> updatePermissionLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            new ActivityResultCallback<ActivityResult>() {
+                @Override
+                public void onActivityResult(ActivityResult result) {
+                    if (Build.VERSION.SDK_INT >= 26 && getPackageManager().canRequestPackageInstalls() && pendingApkFile != null) {
+                        finishInstallation(pendingApkFile);
+                    }
+                }
+            }
+    );
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putBoolean("player_expanded", isPlayerExpanded);
+    }
+
+    private void syncExpandedUI() {
+        if (isPlayerExpanded) {
+            float density = getResources().getDisplayMetrics().density;
+
+            fullSet.applyTo(playerRoot);
+
+            btnPlay.getLayoutParams().width = (int) (100 * density);
+            btnPlay.getLayoutParams().height = (int) (100 * density);
+            btnNext.getLayoutParams().width = (int) (40 * density);
+            btnNext.getLayoutParams().height = (int) (40 * density);
+            btnPrev.getLayoutParams().width = (int) (40 * density);
+            btnPrev.getLayoutParams().height = (int) (40 * density);
+
+            btnPlay.setPadding(0, 0, 0, 0);
+            btnNext.setPadding(0, 0, 0, 0);
+            btnPrev.setPadding(0, 0, 0, 0);
+            btnPlay.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            btnNext.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            btnPrev.setScaleType(ImageView.ScaleType.FIT_CENTER);
+
+            tvTitle.setTextSize(21);
+            tvArtist.setTextSize(15);
+            tvCurrentTime.setTextSize(14);
+            tvTotalTime.setTextSize(14);
+
+            playerRoot.requestLayout();
+        }
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        isLocalMode = getIntent().getBooleanExtra("LOCAL_MODE", false);
+
+        if (isLocalMode) {
+            session = new SessionManager(this);
+            if (!session.isLoggedIn()) session.createLoginSession("LocalUser");
+
+            setContentView(R.layout.activity_main);
+            setupUI();
+            setupPlayer();
+            applyPureBlackTheme();
+            updatePlayerIcons();
+
+            Intent intent = new Intent(this, MusicService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent);
+            } else {
+                startService(intent);
+            }
+            bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+
+            offlineDB = new OfflineDB(this);
+            loadOfflineContent("");
+            return;
+        }
+
+        new File(getFilesDir(), "resonode_logs.txt").delete();
+
+        try {
+            File updateFile = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "update.apk");
+            if (updateFile.exists()) {
+                updateFile.delete();
+            }
+        } catch (Exception e) {}
+
+        try {
+            setContentView(R.layout.activity_main);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            TextView errorView = new TextView(this);
+            errorView.setText(getString(R.string.error_layout, e.getMessage()));
+            errorView.setTextColor(android.graphics.Color.RED);
+            setContentView(errorView);
+            return;
+        }
+
+        lastKnownConnectionState = NetworkReceiver.isConnected(this);
+        session = new SessionManager(this);
+        checkAndUninstallOldApp("com.example.spotifly", R.string.msg_old_app_detected);
+        checkAndUninstallOldApp("com.example.resonode", R.string.msg_old_package_detected);
+        if (!session.isLoggedIn()) { logoutUser(); return; }
+
+        String manufacturer = android.os.Build.MANUFACTURER;
+        String model = android.os.Build.MODEL;
+        String fullDeviceName = manufacturer.substring(0, 1).toUpperCase() + manufacturer.substring(1) + " " + model;
+        session.saveDeviceModel(fullDeviceName);
+
+        setupUI();
+        setupPlayer();
+        applyPureBlackTheme();
+        updatePlayerIcons();
+
+        Intent intent = new Intent(this, MusicService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent);
+        } else {
+            startService(intent);
+        }
+
+        bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+
+        try {
+            PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+            currentVersionCode = pInfo.versionCode;
+        } catch (Exception e) {}
+
+        offlineDB = new OfflineDB(this);
+
+        checkAndRequestAppLinks();
+        SharedPreferences prefs = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE);
+        if (Config.SERVER_URL == null || Config.SERVER_URL.isEmpty()) {
+            Config.SERVER_URL = prefs.getString("last_server_url", "");
+        }
+        checkForUpdates();
+        fetchMusicContent(Config.SERVER_URL, "");
+        pendingIntentToHandle = getIntent();
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 101);
+            }
+        }
+    }
+
+    private String buildServerUrl(String endpoint, String... queryParams) {
+        Uri.Builder builder = Uri.parse(Config.SERVER_URL + endpoint).buildUpon();
+        for (int i = 0; i + 1 < queryParams.length; i += 2) {
+            builder.appendQueryParameter(queryParams[i], queryParams[i + 1]);
+        }
+        return builder.build().toString();
+    }
+
+    private void fetchMusicContent(final String baseUrl, final String folderPath) {
+        if (isLocalMode || isConfirmedOffline || !NetworkReceiver.isConnected(this)) {
+            loadOfflineContent(folderPath);
+            return;
+        }
+        mainHandler.post(new Runnable() {
+            @Override public void run() {
+                if (swipeRefresh != null) swipeRefresh.setRefreshing(true);
+                tvStatus.setVisibility(View.GONE);
+                if (isRetryingConnection) {
+                    tvStatus.setText(getString(R.string.status_server_restarted_searching));
+                    tvStatus.setVisibility(View.VISIBLE);
+                }
+            }
+        });
+
+        final String effectiveUsername = isSharedPreview ? sharedOwner : session.getUsername();
+        final String currentTargetUrl = buildServerUrl("/browse", "username", effectiveUsername, "folder", folderPath);
+        final String currentFolderRequest = folderPath;
+
+        executor.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Request request = new Request.Builder().url(currentTargetUrl).build();
+                    Response response = client.newCall(request).execute();
+
+                    if (response.code() == 403) throw new Exception("Clave Incorrecta");
+                    if (!response.isSuccessful()) throw new Exception("Error " + response.code());
+
+                    isRetryingConnection = false;
+                    isConfirmedOffline = false;
+
+                    JSONObject json = new JSONObject(response.body().string());
+                    if (json.has("current_path")) currentPath = json.getString("current_path");
+
+                    boolean isVault = json.optBoolean("is_vault", false);
+                    JSONArray items = json.getJSONArray("items");
+                    final JSONArray order = json.optJSONArray("order");
+
+                    final List<MusicItem> temp = new ArrayList<>();
+                    boolean foundFolders = false;
+
+                    for (int i = 0; i < items.length(); i++) {
+                        JSONObject o = items.getJSONObject(i);
+                        String name = o.getString("name");
+                        String type = o.getString("type");
+                        String path = o.getString("path");
+                        String artist = o.optString("artist", "");
+                        MusicItem item = new MusicItem(name, type, path, artist);
+                        temp.add(item);
+                        if (item.isFolder()) foundFolders = true;
+                    }
+
+                    final boolean finalIsVault = isVault;
+
+                    mainHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
+                                if (!currentPath.isEmpty() && !currentPath.equals("General")) {
+                                    List<MusicItem> offlineSongs = offlineDB.getSongsInPlaylist(currentPath);
+                                    for (MusicItem os : offlineSongs) {
+                                        if (os.getPath().startsWith("content://")) temp.add(os);
+                                    }
+                                }
+                                PlaylistOrder.sort(temp, order);
+                                PlaylistOrder.sortFoldersByName(temp);
+                                musicList.clear();
+                                musicList.addAll(temp);
+                                updateTitleAndFab(currentPath, finalIsVault);
+                                if (adapter != null) adapter.setCurrentPath(currentPath);
+                                updateHeaderImage();
+
+                                if (currentPath.equals("General") || currentPath.startsWith("General/")) adapter.setMode(PlaylistAdapter.MODE_PUBLIC);
+                                else if (finalIsVault) adapter.setMode(PlaylistAdapter.MODE_VAULT);
+                                else adapter.setMode(PlaylistAdapter.MODE_PRIVATE);
+
+                                if (isSharedPreview) {
+                                    adapter.setMode(PlaylistAdapter.MODE_SHARED);
+                                } else if (currentPath.equals("General") || currentPath.startsWith("General/")) {
+                                    adapter.setMode(PlaylistAdapter.MODE_PUBLIC);
+                                } else if (finalIsVault) {
+                                    adapter.setMode(PlaylistAdapter.MODE_VAULT);
+                                } else {
+                                    adapter.setMode(PlaylistAdapter.MODE_PRIVATE);
+                                }
+                                adapter.notifyDataSetChanged();
+                                refreshSharedAddAllButton();
+                                pullSettingsOnce();
+                                if (isBound && musicService != null && musicService.getCurrentSong() != null) {
+                                    adapter.setPlayingState(musicService.getCurrentSong().getPath(), musicService.isPlaying());
+                                }
+                                mainHandler.postDelayed(() -> tvStatus.setVisibility(View.GONE), 3000);
+                            } catch (Throwable t) {
+                                tvStatus.setText(getString(R.string.error_visual, t.getMessage()));
+                                tvStatus.setVisibility(View.VISIBLE);
+                            }
+                        }
+                    });
+
+                } catch (final Exception e) {
+                    e.printStackTrace();
+
+                    mainHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (NetworkReceiver.isConnected(MainActivity.this)) {
+                                if (!isRetryingConnection) {
+                                    isRetryingConnection = true;
+                                    attemptServerRediscovery(currentFolderRequest);
+                                    return;
+                                }
+                            }
+
+                            isRetryingConnection = false;
+                            isConfirmedOffline = true;
+
+                            loadOfflineContent(currentFolderRequest);
+
+                            String msg = NetworkReceiver.isConnected(MainActivity.this) ? getString(R.string.status_server_error_offline) : getString(R.string.status_no_connection);
+                            tvStatus.setText(msg);
+                            tvStatus.setVisibility(View.VISIBLE);
+                            if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    private void updateHeaderImage() {
+        View cardHeader = findViewById(R.id.card_header);
+        if (ivPlaylistHeader == null || cardHeader == null) return;
+
+        if (currentPath.isEmpty() || currentPath.equals("General")) {
+            cardHeader.setVisibility(View.GONE);
+        } else {
+            cardHeader.setVisibility(View.VISIBLE);
+            ivPlaylistHeader.setVisibility(View.VISIBLE);
+            String headerUrl = buildServerUrl("/cover", "username", session.getUsername(), "path", currentPath);
+
+            Glide.with(this)
+                    .load(headerUrl)
+                    .placeholder(R.mipmap.ic_launcher)
+                    .error(R.mipmap.ic_launcher)
+                    .centerCrop()
+                    .into(ivPlaylistHeader);
+        }
+    }
+
+    private void attemptServerRediscovery(final String pendingFolderPath) {
+        UrlFetcher.fetchLatestUrl(session.getInvitationCode(), new UrlFetcher.UrlCallback() {
+            @Override
+            public void onUrlFound(final String newUrl) {
+                runOnUiThread(() -> {
+                    try { client.connectionPool().evictAll(); } catch (Exception ignored) {}
+                    Config.SERVER_URL = newUrl;
+                    isConfirmedOffline = false;
+                    isRetryingConnection = false;
+                    needsUrlRefresh = false;
+                    getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
+                            .edit().putString("last_server_url", newUrl).apply();
+                    Toast.makeText(MainActivity.this, getString(R.string.toast_server_found_reconnecting), Toast.LENGTH_SHORT).show();
+                    fetchMusicContent(Config.SERVER_URL, pendingFolderPath);
+                });
+            }
+            @Override
+            public void onError(Exception e) {
+                runOnUiThread(() -> handleDiscoveryFailure(pendingFolderPath));
+            }
+        });
+    }
+
+    private void handleDiscoveryFailure(String folderPath) {
+        isRetryingConnection = false;
+        isConfirmedOffline = true;
+        loadOfflineContent(folderPath);
+        tvStatus.setText(getString(R.string.status_server_unavailable));
+        tvStatus.setVisibility(View.VISIBLE);
+        if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
+    }
+
+    private void loadOfflineContent(final String folderPath) {
+        needsUrlRefresh = true;
+        final List<MusicItem> offlineItems = new ArrayList<>();
+        final String displayTitle;
+
+        if (folderPath.isEmpty()) {
+            offlineItems.addAll(offlineDB.getOfflinePlaylists());
+            PlaylistOrder.sortFoldersByName(offlineItems);
+            currentPath = "";
+            displayTitle = getString(R.string.title_offline_mode);
+        } else {
+            offlineItems.addAll(offlineDB.getSongsInPlaylist(folderPath));
+            currentPath = folderPath;
+            displayTitle = getString(R.string.title_local_playlist, folderPath);
+        }
+
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
+                musicList.clear();
+                musicList.addAll(offlineItems);
+
+                if (getSupportActionBar() != null) getSupportActionBar().setTitle(displayTitle);
+                if (folderPath.isEmpty()) fabAdd.show(); else fabAdd.hide();
+                if (btnSearch != null) btnSearch.setVisibility(View.GONE);
+                tvStatus.setText(isLocalMode
+                        ? getString(R.string.status_local_mode)
+                        : getString(R.string.status_offline_mode));
+                tvStatus.setVisibility(View.VISIBLE);
+
+                if (adapter != null) adapter.setCurrentPath(currentPath);
+
+                if (ivPlaylistHeader != null) ivPlaylistHeader.setVisibility(View.GONE);
+
+                adapter.setMode(PlaylistAdapter.MODE_PRIVATE);
+                adapter.notifyDataSetChanged();
+            }
+        });
+    }
+
+    private void updateTitleAndFab(String path, boolean isVault) {
+        TextView tvTitle = findViewById(R.id.tv_custom_title);
+        if (tvTitle == null) return;
+
+        String title = path.isEmpty() ? getString(R.string.app_name).toUpperCase() : path;
+        if (title.startsWith("General")) title = getString(R.string.title_public);
+
+        tvTitle.setText(title.toUpperCase());
+        if (btnSearch != null) {
+            btnSearch.setVisibility(path.isEmpty() && !isOfflineMode() ? View.VISIBLE : View.GONE);
+        }
+        if (fabAdd != null) {
+            if (path.isEmpty()) {
+                fabAdd.show();
+            } else {
+                fabAdd.hide();
+            }
+        }
+    }
+
+    private void playSongByName(String songName) {
+        for (int i = 0; i < musicList.size(); i++) {
+            if (!musicList.get(i).isFolder() && musicList.get(i).getName().contains(songName)) {
+                currentSongIndex = i;
+                playServiceStream(musicList.get(i));
+                break;
+            }
+        }
+    }
+
+    private void playServiceStream(MusicItem item) {
+        if (!isBound || musicService == null) return;
+        try {
+            String urlToPlay;
+            String effectiveUsername = isSharedPreview ? sharedOwner : session.getUsername();
+            if (item.getPath().startsWith("/")) {
+                urlToPlay = item.getPath();
+            } else {
+                urlToPlay = buildServerUrl("/stream", "username", effectiveUsername, "path", item.getPath());
+            }
+            musicService.playUrl(urlToPlay, musicList, currentSongIndex, effectiveUsername);
+        } catch (Exception e) {
+            Toast.makeText(this, getString(R.string.error_play_failed), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void updatePlayerUI(MusicItem song, boolean isPlaying) {
+        playerRoot.setVisibility(View.VISIBLE);
+
+        String cleanTitle = song.getName()
+                .replace(".mp3", "").replace(".MP3", "")
+                .replaceAll("^(\\d+[\\s_\\-]*)+", "");
+
+        String artistName = song.getArtist();
+        if (artistName == null || artistName.isEmpty()) {
+            if (song.isFolder()) artistName = getString(R.string.artist_playlist_default);
+            else artistName = getString(R.string.artist_resonode_music);
+        }
+
+        tvTitle.setText(cleanTitle);
+        tvArtist.setText(artistName);
+
+        updatePlayIcons(isPlaying);
+
+        String urlToTry = null;
+        File localBackup = null;
+
+        if (song.getPath().startsWith("content://")) {
+            android.media.MediaMetadataRetriever mmr = new android.media.MediaMetadataRetriever();
+            try {
+                mmr.setDataSource(this, Uri.parse(song.getPath()));
+                byte[] embeddedArt = mmr.getEmbeddedPicture();
+                if (embeddedArt != null) {
+                    if (ivCover != null)
+                        Glide.with(this).load(embeddedArt).placeholder(R.mipmap.ic_launcher).into(ivCover);
+                    return;
+                }
+            } catch (Exception e) {
+            } finally {
+                try {
+                    mmr.release();
+                } catch (Exception e) {
+                }
+            }
+            urlToTry = buildServerUrl("/cover", "username", (isSharedPreview ? sharedOwner : session.getUsername()), "path", currentPath);
+        } else if (song.getPath().startsWith("/")) {
+            if (offlineDB != null) {
+                String originalPath = offlineDB.getServerPathForLocalFile(song.getPath());
+                if (originalPath != null) {
+                    urlToTry = buildServerUrl("/cover", "username", (isSharedPreview ? sharedOwner : session.getUsername()), "path", originalPath);
+                }
+
+                List<MusicItem> playlists = offlineDB.getOfflinePlaylists();
+                for (MusicItem pl : playlists) {
+                    List<MusicItem> songsInPl = offlineDB.getSongsInPlaylist(pl.getName());
+                    for (MusicItem s : songsInPl) {
+                        if (s.getPath().equals(song.getPath())) {
+                            File dir = getDir("offline_music", Context.MODE_PRIVATE);
+                            String safeName = "cover_" + pl.getName().replaceAll("[^a-zA-Z0-9.-]", "_") + ".jpg";
+                            File f = new File(dir, safeName);
+                            if (f.exists()) localBackup = f;
+                            break;
+                        }
+                    }
+                    if (localBackup != null) break;
+                }
+            }
+        } else {
+            urlToTry = buildServerUrl("/cover", "username", (isSharedPreview ? sharedOwner : session.getUsername()), "path", song.getPath());
+        }
+
+        if (ivCover != null) {
+            Glide.with(this)
+                    .load(urlToTry)
+                    .override(800, 800)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .error(Glide.with(this).load(localBackup).override(800, 800))
+                    .placeholder(R.mipmap.ic_launcher)
+                    .into(ivCover);
+        }
+    }
+
+    private String formatTime(int ms) {
+        int s = (ms/1000)%60;
+        int m = (ms/(1000*60))%60;
+        return String.format("%d:%02d", m, s);
+    }
+
+    public void setShuffle(boolean enabled) {
+        this.isShuffle = enabled;
+    }
+
+    private void setupUI() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+        }
+
+        Toolbar toolbar = findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayShowTitleEnabled(false);
+        }
+
+        drawerLayout = findViewById(R.id.drawer_layout);
+        NavigationView navView = findViewById(R.id.nav_view);
+        ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(this, drawerLayout, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
+        drawerLayout.addDrawerListener(toggle);
+        toggle.syncState();
+        navView.setNavigationItemSelectedListener(this);
+
+        if (navView.getHeaderCount() > 0) {
+            View headerView = navView.getHeaderView(0);
+            TextView tvUser = headerView.findViewById(R.id.tv_header_user);
+            ImageView ivProfile = headerView.findViewById(R.id.iv_user_profile);
+
+            if (tvUser != null) {
+                String shownName = session.getUsername();
+                if (isLocalMode && "LocalUser".equals(shownName)) shownName = getString(R.string.label_local_user);
+                tvUser.setText(shownName);
+            }
+
+            String profileUri = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
+                    .getString("profile_pic_uri", null);
+
+            if (ivProfile != null && profileUri != null) {
+                Glide.with(this)
+                        .load(Uri.parse(profileUri))
+                        .placeholder(R.mipmap.ic_launcher)
+                        .error(R.mipmap.ic_launcher)
+                        .centerCrop()
+                        .into(ivProfile);
+            }
+        }
+
+        tvStatus = findViewById(R.id.tv_status);
+        tvToolbarAction = findViewById(R.id.tv_toolbar_action);
+        btnSearch = findViewById(R.id.btn_search);
+        btnBulkMore = findViewById(R.id.btn_bulk_more);
+
+        recyclerView = findViewById(R.id.recycler_view_playlists);
+        fabAdd = findViewById(R.id.fab_add);
+        swipeRefresh = findViewById(R.id.swipe_refresh);
+        ivPlaylistHeader = findViewById(R.id.iv_playlist_header);
+
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+        swipeRefresh.setColorSchemeColors(0xFF1DB954);
+        swipeRefresh.setOnRefreshListener(() -> {
+            if (isLocalMode) {
+                swipeRefresh.setRefreshing(false);
+                loadOfflineContent(currentPath);
+                return;
+            }
+            try { Glide.get(MainActivity.this).clearMemory(); } catch (Exception e) {}
+            try { client.connectionPool().evictAll(); } catch (Exception e) {}
+
+            if (!NetworkReceiver.isConnected(MainActivity.this)) {
+                Toast.makeText(MainActivity.this, getString(R.string.toast_check_internet), Toast.LENGTH_SHORT).show();
+                swipeRefresh.setRefreshing(false);
+                loadOfflineContent(currentPath);
+                return;
+            }
+
+            if (session.hasInvitationCode()) {
+                tvStatus.setText(getString(R.string.status_syncing_server));
+                tvStatus.setVisibility(View.VISIBLE);
+                UrlFetcher.fetchLatestUrl(session.getInvitationCode(), new UrlFetcher.UrlCallback() {
+                    @Override
+                    public void onUrlFound(String url) {
+                        Config.SERVER_URL = url;
+                        getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
+                                .edit().putString("last_server_url", url).apply();
+                        isConfirmedOffline = false;
+                        isRetryingConnection = false;
+                        needsUrlRefresh = false;
+                        runOnUiThread(() -> {
+                            tvStatus.setVisibility(View.GONE);
+                            fetchMusicContent(Config.SERVER_URL, currentPath);
+                        });
+                    }
+
+                    @Override
+                    public void onError(Exception e) {
+                        runOnUiThread(() -> {
+                            isConfirmedOffline = true;
+                            loadOfflineContent(currentPath);
+                            tvStatus.setText(getString(R.string.status_offline_mode));
+                            tvStatus.setVisibility(View.VISIBLE);
+                            swipeRefresh.setRefreshing(false);
+                        });
+                    }
+                });
+            } else {
+                isRetryingConnection = false;
+                isConfirmedOffline = false;
+                fetchMusicContent(Config.SERVER_URL, currentPath);
+            }
+        });
+
+        adapter = new PlaylistAdapter(this, musicList, PlaylistAdapter.MODE_PRIVATE,
+                item -> {
+                    if (item.isFolder()) {
+                        String target = item.getPath().equals("Playlists Públiques") ? "General" : item.getPath();
+                        recyclerView.startAnimation(android.view.animation.AnimationUtils.loadAnimation(MainActivity.this, R.anim.slide_in_right));
+                        fetchMusicContent(Config.SERVER_URL, target);
+                    } else {
+                        currentSongIndex = musicList.indexOf(item);
+                        playServiceStream(item);
+                    }
+                },
+                (item, action) -> {
+                    if (action.equals(getString(R.string.action_delete))) deleteItem(item);
+                    else if (action.equals(getString(R.string.action_rename))) showRenameDialog(item);
+                    else if (action.equals(getString(R.string.action_add_to_playlist))) showPlaylistSelectorForVaultItem(item);
+                    else if (action.equals(getString(R.string.action_download_offline))) downloadPlaylist(item);
+                    else if (action.equals(getString(R.string.action_delete_offline))) deleteOfflinePlaylist(item);
+                    else if (action.equals(getString(R.string.action_edit_playlist))) openEditPlaylist(item);
+                    else if (action.equals(getString(R.string.action_change_cover))) {
+                        playlistCoverTarget = item;
+                        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                        intent.setType("image/*");
+                        pickImageLauncher.launch(Intent.createChooser(intent, getString(R.string.chooser_select_cover)));
+                    }
+                    else if (action.equals(getString(R.string.action_share))) sharePlaylist(item);
+                    else if (action.equals(getString(R.string.action_add_to_queue))) {
+                        if (item.isFolder()) addFolderToQueue(item);
+                        else addSongsToQueue(Collections.singletonList(item), currentOwnerUsername());
+                    }
+                }
+        );
+
+        adapter.setQueueEnabled(true);
+        adapter.setOnSelectionChangedListener(count -> {
+            if (count > 0) {
+                btnSearch.setVisibility(View.GONE);
+                fabAdd.hide();
+
+                if (isSharedPreview) {
+                    btnBulkMore.setVisibility(View.GONE);
+                    tvToolbarAction.setVisibility(View.VISIBLE);
+                    tvToolbarAction.setText(getString(R.string.toolbar_add_count, count));
+                } else if (adapter.getMode() == PlaylistAdapter.MODE_PRIVATE) {
+                    btnBulkMore.setVisibility(View.VISIBLE);
+                    tvToolbarAction.setVisibility(View.VISIBLE);
+                    tvToolbarAction.setText(getString(R.string.toolbar_selected_count, count));
+                } else {
+                    btnBulkMore.setVisibility(View.GONE);
+                    tvToolbarAction.setVisibility(View.VISIBLE);
+                    tvToolbarAction.setText(getString(R.string.toolbar_add_count, count));
+                }
+            } else {
+                refreshSharedAddAllButton();
+                btnBulkMore.setVisibility(View.GONE);
+                btnSearch.setVisibility(currentPath.isEmpty() && !isSharedPreview && !isOfflineMode() ? View.VISIBLE : View.GONE);
+                if (currentPath.isEmpty() && !isSharedPreview) fabAdd.show();
+            }
+        });
+
+        recyclerView.setAdapter(adapter);
+        attachSwipeToQueue();
+
+        recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
+                if (!currentPath.isEmpty()) return;
+                if (dy > 8) fabAdd.hide();
+                else if (dy < -8) fabAdd.show();
+            }
+
+            @Override
+            public void onScrollStateChanged(@NonNull RecyclerView rv, int newState) {
+                if (newState == RecyclerView.SCROLL_STATE_IDLE && currentPath.isEmpty()) {
+                    LinearLayoutManager lm = (LinearLayoutManager) rv.getLayoutManager();
+                    if (lm != null && lm.findFirstCompletelyVisibleItemPosition() == 0)
+                        fabAdd.show();
+                }
+            }
+        });
+
+        fabAdd.setOnClickListener(v -> handleFabClick());
+
+        btnSearch.setOnClickListener(v -> {
+            searchLauncher.launch(new Intent(MainActivity.this, SearchActivity.class));
+        });
+
+        tvToolbarAction.setOnClickListener(v -> {
+            List<MusicItem> selected = adapter.getSelectedItems();
+            if (isSharedPreview) {
+                List<MusicItem> source = selected.isEmpty() ? musicList : selected;
+                List<MusicItem> toAdd = new ArrayList<>();
+                for (MusicItem m : source) {
+                    if (!m.isFolder()) toAdd.add(m);
+                }
+                if (!toAdd.isEmpty()) showAddToPlaylistDialog(toAdd);
+            } else if (!selected.isEmpty()) {
+                showAddToPlaylistDialog(selected);
+            }
+        });
+
+        btnBulkMore.setOnClickListener(v -> {
+            android.widget.PopupMenu popup = new android.widget.PopupMenu(MainActivity.this, v);
+            popup.getMenu().add(getString(R.string.action_add_to_playlist));
+
+            if (!isSharedPreview) {
+                popup.getMenu().add(getString(R.string.action_delete));
+            }
+
+            popup.setOnMenuItemClickListener(item -> {
+                String action = item.getTitle().toString();
+                List<MusicItem> selected = adapter.getSelectedItems();
+
+                if (action.equals(getString(R.string.action_add_to_playlist))) {
+                    if (isSharedPreview) {
+                        showAddToPlaylistDialogForShared(selected);
+                    } else {
+                        showAddToPlaylistDialog(selected);
+                    }
+                } else if (action.equals(getString(R.string.action_delete))) {
+                    bulkDeleteItems(selected);
+                }
+                return true;
+            });
+            popup.show();
+        });
+    }
+
+    private void refreshSharedAddAllButton() {
+        if (tvToolbarAction == null) return;
+
+        boolean hasSongs = false;
+        for (MusicItem m : musicList) {
+            if (!m.isFolder()) { hasSongs = true; break; }
+        }
+
+        if (isSharedPreview && hasSongs) {
+            tvToolbarAction.setText(getString(R.string.toolbar_add_all));
+            tvToolbarAction.setVisibility(View.VISIBLE);
+        } else if (adapter == null || adapter.getSelectedItems().isEmpty()) {
+            tvToolbarAction.setVisibility(View.GONE);
+        }
+    }
+
+    private void bulkDeleteItems(List<MusicItem> items) {
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.title_delete_songs_count, items.size()))
+                .setMessage(getString(R.string.msg_delete_songs_confirm))
+                .setPositiveButton(getString(R.string.btn_yes), (dialog, which) -> {
+
+                    if (offlineDB == null) offlineDB = new OfflineDB(MainActivity.this);
+                    boolean hasLocals = false;
+                    for (MusicItem i : items) {
+                        if (i.getPath().startsWith("content://")) {
+                            offlineDB.removeLocalSong(i.getPath(), currentPath);
+                            hasLocals = true;
+                        }
+                    }
+
+                    if (hasLocals) {
+                        Toast.makeText(MainActivity.this, getString(R.string.toast_local_songs_removed), Toast.LENGTH_SHORT).show();
+                    }
+
+                    executor.execute(() -> {
+                        for (MusicItem i : items) {
+                            if (!i.getPath().startsWith("content://")) {
+                                JSONObject j = new JSONObject();
+                                try {
+                                    j.put("username", session.getUsername());
+                                    j.put("path", i.getPath());
+                                    RequestBody body = RequestBody.create(MediaType.parse("application/json"), j.toString());
+                                    Request request = new Request.Builder()
+                                            .url(Config.SERVER_URL + "/playlist/delete_item")
+                                            .header("x-secret-key", Config.API_SECRET_KEY)
+                                            .post(body)
+                                            .build();
+                                    client.newCall(request).execute();
+                                } catch (Exception e) {}
+                            }
+                        }
+                        mainHandler.post(() -> {
+                            adapter.setSelectionMode(false);
+                            fetchMusicContent(Config.SERVER_URL, currentPath);
+                        });
+                    });
+                })
+                .setNegativeButton(getString(R.string.btn_no), null)
+                .show();
+    }
+
+    private void downloadPlaylist(final MusicItem playlistItem) {
+        if (offlineDB.isPlaylistDownloaded(playlistItem.getName())) {
+            Toast.makeText(this, getString(R.string.toast_playlist_already_downloaded), Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Toast.makeText(this, getString(R.string.toast_starting_download), Toast.LENGTH_SHORT).show();
+
+        final android.app.NotificationManager notificationManager = (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        final String channelId = "DownloadChannel";
+        final int notificationId = 888;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            android.app.NotificationChannel channel = new android.app.NotificationChannel(
+                    channelId, getString(R.string.channel_downloads_name), android.app.NotificationManager.IMPORTANCE_LOW);
+            notificationManager.createNotificationChannel(channel);
+        }
+
+        final androidx.core.app.NotificationCompat.Builder builder = new androidx.core.app.NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(getString(R.string.notif_downloading_title, playlistItem.getName()))
+                .setContentText(getString(R.string.notif_calculating_songs))
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setProgress(100, 0, false);
+
+        notificationManager.notify(notificationId, builder.build());
+
+        executor.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    String folderPath = playlistItem.getPath();
+                    String username = session.getUsername();
+                    String urlList = buildServerUrl("/browse", "username", username, "folder", folderPath);
+                    Request requestList = new Request.Builder().url(urlList).build();
+                    Response responseList = client.newCall(requestList).execute();
+
+                    if (!responseList.isSuccessful()) throw new Exception(getString(R.string.error_reading_playlist));
+
+                    JSONObject json = new JSONObject(responseList.body().string());
+                    JSONArray items = json.getJSONArray("items");
+
+                    int totalSongs = 0;
+                    for (int i = 0; i < items.length(); i++) {
+                        if (items.getJSONObject(i).getString("type").equals("file")) {
+                            totalSongs++;
+                        }
+                    }
+
+                    File privateDir = getDir("offline_music", Context.MODE_PRIVATE);
+                    if (!privateDir.exists()) privateDir.mkdirs();
+
+                    try {
+                        String coverUrl = buildServerUrl("/cover", "username", username, "path", folderPath);
+                        Request reqCover = new Request.Builder().url(coverUrl).build();
+                        Response resCover = client.newCall(reqCover).execute();
+
+                        if (resCover.isSuccessful()) {
+                            String safeCoverName = "cover_" + playlistItem.getName().replaceAll("[^a-zA-Z0-9.-]", "_") + ".jpg";
+                            File localCover = new File(privateDir, safeCoverName);
+                            FileOutputStream fos = new FileOutputStream(localCover);
+                            fos.write(resCover.body().bytes());
+                            fos.close();
+                        }
+                        resCover.close();
+                    } catch (Exception e) {
+                    }
+
+                    int downloadedCount = 0;
+                    for (int i = 0; i < items.length(); i++) {
+                        JSONObject o = items.getJSONObject(i);
+                        if (!o.getString("type").equals("file")) continue;
+
+                        String serverPath = o.getString("path");
+                        String name = o.getString("name");
+                        String artist = o.optString("artist", getString(R.string.unknown_artist));
+
+                        downloadedCount++;
+                        int progressPercent = 0;
+                        if (totalSongs > 0) progressPercent = (int) ((downloadedCount * 100L) / totalSongs);
+
+                        builder.setProgress(totalSongs, downloadedCount, false)
+                                .setContentText(getString(R.string.notif_download_progress, progressPercent, name.replace(".mp3", "")));
+                        notificationManager.notify(notificationId, builder.build());
+
+                        String streamUrl = buildServerUrl("/stream", "username", username, "path", serverPath);
+
+                        Request reqFile = new Request.Builder().url(streamUrl).header("x-secret-key", Config.API_SECRET_KEY).build();
+                        Response resFile = client.newCall(reqFile).execute();
+
+                        if (resFile.isSuccessful()) {
+                            String safeFileName = name.replaceAll("[^a-zA-Z0-9.-]", "_");
+                            File localFile = new File(privateDir, safeFileName);
+                            FileOutputStream fos = new FileOutputStream(localFile);
+                            fos.write(resFile.body().bytes());
+                            fos.close();
+
+                            offlineDB.saveSong(serverPath, name, playlistItem.getName(), localFile.getAbsolutePath(), artist);
+                        }
+                        resFile.close();
+                    }
+
+                    notificationManager.cancel(notificationId);
+
+                    final int count = downloadedCount;
+                    mainHandler.post(new Runnable() {
+                        @Override public void run() {
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_downloaded_count, count), Toast.LENGTH_LONG).show();
+                            if (adapter != null) adapter.notifyDataSetChanged();
+                        }
+                    });
+
+                } catch (final Exception e) {
+                    e.printStackTrace();
+
+                    notificationManager.cancel(notificationId);
+
+                    mainHandler.post(new Runnable() {
+                        @Override public void run() { Toast.makeText(MainActivity.this, getString(R.string.toast_generic_error, e.getMessage()), Toast.LENGTH_SHORT).show(); }
+                    });
+                }
+            }
+        });
+    }
+
+    private void setupPlayer() {
+        playerRoot = findViewById(R.id.player_root);
+        ivCover = findViewById(R.id.iv_cover);
+        tvTitle = findViewById(R.id.tv_title);
+        tvArtist = findViewById(R.id.tv_artist);
+        btnPlay = findViewById(R.id.btn_play);
+        btnClosePlayer = findViewById(R.id.btn_close_player);
+        seekBar = findViewById(R.id.seek_bar);
+        tvCurrentTime = findViewById(R.id.tv_current_time);
+        tvTotalTime = findViewById(R.id.tv_total_time);
+        btnNext = findViewById(R.id.btn_next);
+        btnPrev = findViewById(R.id.btn_prev);
+        btnShuffle = findViewById(R.id.btn_shuffle);
+        btnRepeat = findViewById(R.id.btn_repeat);
+        btnQueue = findViewById(R.id.btn_queue);
+
+        miniSet.clone(playerRoot);
+        fullSet.clone(this, R.layout.player_expanded);
+
+        playerRoot.setOnClickListener(null);
+        playerRoot.setClickable(false);
+
+        View.OnClickListener expandListener = v -> {
+            if(!isPlayerExpanded) {
+                isPlayerExpanded = true;
+                applyPlayerState(true, true);
+            }
+        };
+
+        findViewById(R.id.bg_mini).setOnClickListener(expandListener);
+        ivCover.setOnClickListener(expandListener);
+        tvTitle.setOnClickListener(expandListener);
+        tvArtist.setOnClickListener(expandListener);
+
+        btnClosePlayer.setOnClickListener(v -> closePlayer());
+
+        View.OnClickListener playToggle = v -> { if(isBound) { if(musicService.isPlaying()) musicService.pauseMusic(); else musicService.resumeMusic(); } };
+        btnPlay.setOnClickListener(playToggle);
+        btnNext.setOnClickListener(v -> { if(isBound) musicService.playNext(); });
+        btnPrev.setOnClickListener(v -> { if(isBound) musicService.playPrev(); });
+
+        btnShuffle.setOnClickListener(v -> { if (isBound) { musicService.toggleShuffle(); updateShuffleUI(); } });
+        btnRepeat.setOnClickListener(v -> { if (isBound) { musicService.toggleRepeatOne(); updateRepeatUI(); } });
+        if (btnQueue != null) btnQueue.setOnClickListener(v -> showQueueDialog());
+
+        if (btnAddShared != null) {
+            btnAddShared.setOnClickListener(v -> {
+                if (isBound && musicService != null && musicService.getCurrentSong() != null) {
+                    List<MusicItem> tempList = new ArrayList<>();
+                    tempList.add(musicService.getCurrentSong());
+                    showAddToPlaylistDialogForShared(tempList);
+                }
+            });
+        }
+
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar s, int p, boolean f) { if(f && isBound) musicService.seekTo(p); }
+            @Override public void onStartTrackingTouch(SeekBar s) {}
+            @Override public void onStopTrackingTouch(SeekBar s) {}
+        });
+
+        Runnable updateSeek = new Runnable() {
+            @Override public void run() {
+                if(isBound && musicService.isPlaying()) {
+                    int c = musicService.getCurrentPosition(); int d = musicService.getDuration();
+                    seekBar.setMax(d); seekBar.setProgress(c);
+                    tvCurrentTime.setText(formatTime(c)); tvTotalTime.setText(formatTime(d));
+                }
+                seekBarHandler.postDelayed(this, 1000);
+            }
+        };
+        seekBarHandler.post(updateSeek);
+    }
+
+    private void closePlayer() {
+        if(isPlayerExpanded) {
+            isPlayerExpanded = false;
+            applyPlayerState(false, true);
+        }
+    }
+
+    private void updateShuffleUI() {
+        if (isBound && musicService != null && btnShuffle != null) {
+            int color = musicService.isShuffleEnabled() ? 0xFFF2B327 : 0xFFFFFFFF;
+            btnShuffle.setColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN);
+        }
+    }
+
+    private void updateRepeatUI() {
+        if (isBound && musicService != null && btnRepeat != null) {
+            int color = musicService.isRepeatOneEnabled() ? 0xFFF2B327 : 0xFFFFFFFF;
+            btnRepeat.setColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN);
+        }
+    }
+
+    private void uploadCoverImage(Uri imageUri, final MusicItem playlist) {
+        ProgressDialog pd = new ProgressDialog(this);
+        pd.setMessage(getString(R.string.progress_uploading_cover));
+        pd.setCancelable(false);
+        pd.show();
+
+        final ProgressDialog finalPd = pd;
+        executor.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    InputStream is = getContentResolver().openInputStream(imageUri);
+                    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                    int nRead;
+                    byte[] data = new byte[16384];
+                    while ((nRead = is.read(data, 0, data.length)) != -1) {
+                        buffer.write(data, 0, nRead);
+                    }
+                    byte[] imageBytes = buffer.toByteArray();
+
+                    RequestBody requestBody = new MultipartBody.Builder()
+                            .setType(MultipartBody.FORM)
+                            .addFormDataPart("username", session.getUsername())
+                            .addFormDataPart("playlist_path", playlist.getPath())
+                            .addFormDataPart("file", "cover.jpg",
+                                    RequestBody.create(MediaType.parse("image/jpeg"), imageBytes))
+                            .build();
+
+                    Request request = new Request.Builder()
+                            .url(Config.SERVER_URL + "/playlist/upload_cover")
+                            .header("x-secret-key", Config.API_SECRET_KEY)
+                            .post(requestBody)
+                            .build();
+
+                    final Response response = client.newCall(request).execute();
+
+                    if (response.isSuccessful()) {
+
+                        try {
+                            File privateDir = getDir("offline_music", Context.MODE_PRIVATE);
+                            String safeCoverName = "cover_" + playlist.getName().replaceAll("[^a-zA-Z0-9.-]", "_") + ".jpg";
+                            File localCover = new File(privateDir, safeCoverName);
+                            if (localCover.exists()) {
+                                localCover.delete();
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+
+                        mainHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                Glide.get(MainActivity.this).clearMemory();
+                            }
+                        });
+                        Glide.get(MainActivity.this).clearDiskCache();
+
+                        mainHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                finalPd.dismiss();
+                                Toast.makeText(MainActivity.this, getString(R.string.toast_cover_updated), Toast.LENGTH_SHORT).show();
+
+                                fetchMusicContent(Config.SERVER_URL, currentPath);
+                            }
+                        });
+                    } else {
+                        throw new Exception(getString(R.string.error_server_code, response.code()));
+                    }
+                } catch (final Exception e) {
+                    e.printStackTrace();
+                    mainHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            finalPd.dismiss();
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_upload_failed, e.getMessage()), Toast.LENGTH_LONG).show();
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    private void handleFabClick() {
+        if (isOfflineMode()) {
+            String[] offlineOpts = {getString(R.string.menu_create_playlist), getString(R.string.menu_add_local_song)};
+            new AlertDialog.Builder(this).setItems(offlineOpts, (d, w) -> {
+                if (w == 0) {
+                    showCreatePlaylistDialog();
+                } else {
+                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("audio/*");
+                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                    pickLocalSongLauncher.launch(intent);
+                }
+            }).show();
+            return;
+        }
+
+        String[] opts = {getString(R.string.menu_create_playlist), getString(R.string.menu_add_from_public_playlist), getString(R.string.menu_search_vault), getString(R.string.menu_add_local_song)};
+        new AlertDialog.Builder(this).setItems(opts, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface d, int w) {
+                if(w==0) showCreatePlaylistDialog();
+                else if(w==1) goToGeneralAndSelect();
+                else if(w==2) {
+                    searchLauncher.launch(new Intent(MainActivity.this, SearchActivity.class));
+                }
+                else {
+                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("audio/*");
+                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                    pickLocalSongLauncher.launch(intent);
+                }
+            }
+        }).show();
+    }
+
+    private void goToGeneralAndSelect() {
+        fetchMusicContent(Config.SERVER_URL, "General");
+    }
+
+    private void postJson(final String endpoint, final String jsonBody, final Runnable onSuccess) {
+        executor.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    RequestBody body = RequestBody.create(MediaType.parse("application/json"), jsonBody);
+                    Request request = new Request.Builder().url(Config.SERVER_URL + endpoint).header("x-secret-key", Config.API_SECRET_KEY).post(body).build();
+                    if(client.newCall(request).execute().isSuccessful()) {
+                        if(onSuccess != null) onSuccess.run();
+                    }
+                } catch (Exception e) { showErrorOnUI(getString(R.string.error_server_generic)); }
+            }
+        });
+    }
+
+    private void showErrorOnUI(final String m) {
+        mainHandler.post(new Runnable() {
+            @Override public void run() {
+                if(swipeRefresh!=null)swipeRefresh.setRefreshing(false);
+                tvStatus.setText(m); tvStatus.setVisibility(View.VISIBLE);
+                retryHandler.postDelayed(retryRunnable,5000);
+            }
+        });
+    }
+
+    private void logoutUser() {
+        AppPrefs.setLocalMode(this, false);
+        SettingsSync.clearLocalProfile(this);
+        session.logoutUser();
+        startActivity(new Intent(this, LoginActivity.class));
+        overridePendingTransition(R.anim.fade_in_activity, R.anim.fade_out_activity);
+        finish();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if(isPlayerExpanded) {
+            closePlayer();
+        }
+        else if(drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            drawerLayout.closeDrawer(GravityCompat.START);
+        }
+        else if(!adapter.getSelectedItems().isEmpty()) {
+            adapter.setSelectionMode(false);
+            if(!isSharedPreview) fabAdd.show();
+        }
+        else if(isSharedPreview) {
+            isSharedPreview = false;
+            sharedOwner = "";
+            sharedToken = "";
+            fetchMusicContent(Config.SERVER_URL, "");
+        }
+        else if(!currentPath.isEmpty()) {
+            File f=new File(currentPath);
+            String p=f.getParent();
+            if(p==null)p="";
+            recyclerView.startAnimation(android.view.animation.AnimationUtils.loadAnimation(this, R.anim.slide_in_left));
+            fetchMusicContent(Config.SERVER_URL, p.replace("\\","/"));
+        }
+        else {
+            super.onBackPressed();
+        }
+    }
+
+    @Override
+    public boolean onNavigationItemSelected(@NonNull MenuItem i) {
+        if(i.getItemId()==R.id.nav_home) fetchMusicContent(Config.SERVER_URL,"");
+        else if (i.getItemId() == R.id.nav_wrapped) {
+            startActivity(new Intent(MainActivity.this, WrappedActivity.class));
+            overridePendingTransition(R.anim.slide_up_enter, R.anim.hold);
+        }
+        else if (i.getItemId() == R.id.nav_settings) {
+            startActivity(new Intent(MainActivity.this, SettingsActivity.class));
+            overridePendingTransition(R.anim.slide_up_enter, R.anim.hold);
+        }
+        else if(i.getItemId()==R.id.nav_logout) logoutUser();
+        drawerLayout.closeDrawer(GravityCompat.START);
+        return true;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        NavigationView navView = findViewById(R.id.nav_view);
+        if (navView != null && navView.getHeaderCount() > 0) {
+            View header = navView.getHeaderView(0);
+            ImageView ivProfile = header.findViewById(R.id.iv_user_profile);
+
+            String profileUri = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE).getString("profile_pic_uri", null);
+            if (ivProfile != null && profileUri != null) {
+                Glide.with(this).load(Uri.parse(profileUri)).placeholder(R.mipmap.ic_launcher).centerCrop().into(ivProfile);
+            }
+        }
+
+        applyPureBlackTheme();
+        updatePlayerIcons();
+
+        try { client.connectionPool().evictAll(); } catch (Exception ignored) {}
+
+        if (networkReceiver == null) {
+            networkReceiver = new NetworkReceiver(this::handleNetworkChange);
+            registerReceiver(networkReceiver, new android.content.IntentFilter(android.net.ConnectivityManager.CONNECTIVITY_ACTION));
+        }
+
+        if (NetworkReceiver.isConnected(this) && (isConfirmedOffline || needsUrlRefresh || musicList.isEmpty())) {
+            lastKnownConnectionState = null;
+            handleNetworkChange(true);
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        try {
+            if (networkReceiver != null) unregisterReceiver(networkReceiver);
+        } catch (Exception e) {}
+        networkReceiver = null;
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (queueDialog != null) queueDialog.dismiss();
+        if (isBound && musicService != null) musicService.setQueueListener(null);
+        if(isBound) unbindService(serviceConnection);
+    }
+
+    private void showCreatePlaylistDialog() {
+        EditText i=new EditText(this);
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.title_new))
+                .setView(i)
+                .setPositiveButton(getString(R.string.btn_ok), new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) {
+                        if (isOfflineMode()) { createOfflinePlaylist(i.getText().toString()); return; }
+                        JSONObject j=new JSONObject();
+                        try{
+                            j.put("username",session.getUsername());
+                            j.put("playlist_name",i.getText().toString());
+                        }catch(Exception e){}
+                        postJson("/playlist/create",j.toString(), new Runnable() {
+                            @Override public void run() {
+                                mainHandler.post(new Runnable() {
+                                    @Override public void run() { fetchMusicContent(Config.SERVER_URL,""); }
+                                });
+                            }
+                        });
+                    }
+                }).show();
+    }
+
+    private boolean isOfflineMode() {
+        return isLocalMode || isConfirmedOffline || !NetworkReceiver.isConnected(this);
+    }
+
+    private void createOfflinePlaylist(String rawName) {
+        String name = rawName == null ? "" : rawName.replaceAll("[\\\\/]", " ").trim();
+        if (name.isEmpty()) {
+            Toast.makeText(this, getString(R.string.toast_enter_playlist_name), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (offlineDB == null) offlineDB = new OfflineDB(this);
+        if (offlineDB.createEmptyPlaylist(name)) {
+            Toast.makeText(this, getString(R.string.toast_playlist_created, name), Toast.LENGTH_SHORT).show();
+            loadOfflineContent("");
+        } else {
+            Toast.makeText(this, getString(R.string.toast_playlist_exists), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void showOfflinePlaylistSelectorForLocalSongs(final List<Uri> audioUris) {
+        if (offlineDB == null) offlineDB = new OfflineDB(this);
+        final List<String> pList = new ArrayList<>();
+        for (MusicItem p : offlineDB.getOfflinePlaylists()) pList.add(p.getName());
+        PlaylistOrder.sortNames(pList);
+
+        if (pList.isEmpty()) {
+            Toast.makeText(this, getString(R.string.msg_create_playlist_first), Toast.LENGTH_LONG).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.title_add_songs_count, audioUris.size()))
+                .setItems(pList.toArray(new String[0]), (d, w) -> {
+                    String selectedPlaylist = pList.get(w);
+                    for (Uri uri : audioUris) {
+                        String[] meta = getAudioMetadata(uri);
+                        offlineDB.saveSong(uri.toString(), meta[0], selectedPlaylist, uri.toString(), meta[1]);
+                    }
+                    Toast.makeText(this, getString(R.string.toast_songs_added_count, audioUris.size(), selectedPlaylist), Toast.LENGTH_SHORT).show();
+                    loadOfflineContent(currentPath);
+                }).show();
+    }
+
+    private void deleteItem(final MusicItem i) {
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.title_delete))
+                .setPositiveButton(getString(R.string.btn_yes), new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) {
+
+                        if (i.getPath().startsWith("content://")) {
+                            if (offlineDB == null) offlineDB = new OfflineDB(MainActivity.this);
+                            offlineDB.removeLocalSong(i.getPath(), currentPath);
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_local_song_removed), Toast.LENGTH_SHORT).show();
+                            fetchMusicContent(Config.SERVER_URL, currentPath);
+                        } else {
+                            JSONObject j=new JSONObject();
+                            try{
+                                j.put("username",session.getUsername());
+                                j.put("path",i.getPath());
+                            }catch(Exception e){}
+                            postJson("/playlist/delete_item",j.toString(), new Runnable() {
+                                @Override public void run() {
+                                    mainHandler.post(new Runnable() {
+                                        @Override public void run() { fetchMusicContent(Config.SERVER_URL,currentPath); }
+                                    });
+                                }
+                            });
+                        }
+                    }
+                }).show();
+    }
+
+    private void showRenameDialog(final MusicItem i) {
+        EditText t=new EditText(this); t.setText(i.getName());
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.title_rename))
+                .setView(t)
+                .setPositiveButton(getString(R.string.btn_ok), new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) {
+                        JSONObject j=new JSONObject();
+                        try{
+                            j.put("username",session.getUsername());
+                            j.put("old_name",i.getName());
+                            j.put("new_name",t.getText().toString());
+                        }catch(Exception e){}
+                        postJson("/playlist/rename",j.toString(), new Runnable() {
+                            @Override public void run() {
+                                mainHandler.post(new Runnable() {
+                                    @Override public void run() { fetchMusicContent(Config.SERVER_URL,""); }
+                                });
+                            }
+                        });
+                    }
+                }).show();
+    }
+
+    private void showPlaylistSelectorForVaultItem(final MusicItem item) {
+        executor.execute(new Runnable() {
+            @Override public void run() {
+                try{
+                    Response r=client.newCall(new Request.Builder().url(Config.SERVER_URL+"/browse?username="+session.getUsername()+"&folder=").build()).execute();
+                    if(r.isSuccessful()){
+                        JSONArray a=new JSONObject(r.body().string()).getJSONArray("items");
+                        final List<String> l=new ArrayList<>();
+
+                        l.add(getString(R.string.item_new_ellipsis));
+
+                        for(int x=0;x<a.length();x++) if(a.getJSONObject(x).getString("type").equals("folder")) l.add(a.getJSONObject(x).getString("name"));
+                        PlaylistOrder.sortNames(l.subList(1, l.size()));
+                        mainHandler.post(new Runnable() {
+                            @Override public void run() {
+                                new AlertDialog.Builder(MainActivity.this).setItems(l.toArray(new String[0]), new DialogInterface.OnClickListener() {
+                                    @Override public void onClick(DialogInterface d, int w) {
+                                        if (w == 0) {
+                                            showCreatePlaylistForVaultItemDialog(item);
+                                        } else {
+                                            addToSpecificPlaylist(l.get(w), item);
+                                        }
+                                    }
+                                }).show();
+                            }
+                        });
+                    }
+                }catch(Exception e){}
+            }
+        });
+    }
+
+    private void showCreatePlaylistForVaultItemDialog(final MusicItem item) {
+        EditText i = new EditText(this);
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.title_new_playlist_name))
+                .setView(i)
+                .setPositiveButton(getString(R.string.btn_ok), (d, w) -> createPlaylistAndAddVaultItem(i.getText().toString(), item))
+                .show();
+    }
+
+    private void createPlaylistAndAddVaultItem(final String name, final MusicItem item) {
+        JSONObject j = new JSONObject();
+        try {
+            j.put("username", session.getUsername());
+            j.put("playlist_name", name);
+        } catch (Exception e) {}
+
+        postJson("/playlist/create", j.toString(), () -> addToSpecificPlaylist(name, item));
+    }
+
+    private void addToSpecificPlaylist(final String playlistName, final MusicItem item) {
+        JSONObject j = new JSONObject();
+        try {
+            j.put("username", session.getUsername());
+            j.put("playlist_name", playlistName);
+
+            JSONArray a = new JSONArray();
+            a.put(item.getPath());
+
+            j.put("items", a);
+            j.put("songs", a);
+
+            String endpoint = item.isFolder() ? "/playlist/add_from_vault" : "/playlist/add";
+
+            postJson(endpoint, j.toString(), new Runnable() {
+                @Override public void run() {
+                    mainHandler.post(new Runnable() {
+                        @Override public void run() {
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_added_to_playlist, playlistName), Toast.LENGTH_SHORT).show();
+
+                        }
+                    });
+                }
+            });
+        } catch(Exception e){}
+    }
+
+    private void showAddToPlaylistDialog(final List<MusicItem> l) {
+        executor.execute(new Runnable() {
+            @Override public void run() {
+                try{
+                    Response r=client.newCall(new Request.Builder().url(Config.SERVER_URL+"/browse?username="+session.getUsername()+"&folder=").build()).execute();
+                    if(r.isSuccessful()){
+                        JSONArray a=new JSONObject(r.body().string()).getJSONArray("items");
+                        final List<String> n=new ArrayList<>();
+                        n.add(getString(R.string.item_new_ellipsis));
+                        for(int x=0;x<a.length();x++) if(a.getJSONObject(x).getString("type").equals("folder")) n.add(a.getJSONObject(x).getString("name"));
+                        PlaylistOrder.sortNames(n.subList(1, n.size()));
+                        mainHandler.post(new Runnable() {
+                            @Override public void run() {
+                                new AlertDialog.Builder(MainActivity.this).setItems(n.toArray(new String[0]), new DialogInterface.OnClickListener() {
+                                    @Override public void onClick(DialogInterface d, int w) {
+                                        if(w==0)showCreatePlaylistForAddDialog(l);
+                                        else addSongsToPlaylist(n.get(w),l);
+                                    }
+                                }).show();
+                            }
+                        });
+                    }
+                }catch(Exception e){}
+            }
+        });
+    }
+
+    private void showCreatePlaylistForAddDialog(final List<MusicItem> s) {
+        EditText i=new EditText(this);
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.title_name))
+                .setView(i)
+                .setPositiveButton(getString(R.string.btn_ok), new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) { createPlaylistAndAdd(i.getText().toString(),s); }
+                }).show();
+    }
+
+    private void createPlaylistAndAdd(final String n, final List<MusicItem> s) {
+        JSONObject j=new JSONObject();
+        try{
+            j.put("username",session.getUsername());
+            j.put("playlist_name",n);
+        }catch(Exception e){}
+        postJson("/playlist/create",j.toString(), new Runnable() {
+            @Override public void run() { addSongsToPlaylist(n,s); }
+        });
+    }
+
+    private void addSongsToPlaylist(String n, List<MusicItem> s) {
+        JSONObject j=new JSONObject();
+        JSONArray a=new JSONArray();
+        for(MusicItem m:s)a.put(m.getPath());
+        try{
+            j.put("username",session.getUsername());
+            j.put("playlist_name",n);
+            j.put("songs",a);
+        }catch(Exception e){}
+        postJson("/playlist/add",j.toString(), new Runnable() {
+            @Override public void run() {
+                mainHandler.post(new Runnable() {
+                    @Override public void run() {
+                        adapter.setSelectionMode(false);
+                        fabAdd.show();
+                        fetchMusicContent(Config.SERVER_URL,"");
+                    }
+                });
+            }
+        });
+    }
+
+    private void checkForUpdates() {
+        executor.execute(new Runnable() {
+            @Override public void run() {
+                try {
+                    String url = Config.SERVER_URL + "/update/check?t=" + System.currentTimeMillis();
+                    Request request = new Request.Builder().url(url).build();
+                    Response response = client.newCall(request).execute();
+                    if (response.isSuccessful()) {
+                        JSONObject json = new JSONObject(response.body().string());
+                        final int serverVersion = json.getInt("version");
+                        final String serverChangelog = json.optString("changelog", getString(R.string.changelog_default));
+                        if (serverVersion > currentVersionCode) {
+                            mainHandler.post(new Runnable() { @Override public void run() { showUpdateDialog(serverVersion); } });
+                        } else if (serverVersion == currentVersionCode) {
+                            mainHandler.post(new Runnable() { @Override public void run() { checkAndShowChangelog(serverVersion, serverChangelog); } });
+                        }
+                    }
+                } catch (Exception e) {}
+            }
+        });
+    }
+
+    private void checkAndShowChangelog(int version, String logText) {
+        android.content.SharedPreferences prefs = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE);
+        int lastSeenLogVersion = prefs.getInt("last_changelog_seen", 0);
+        if (version > lastSeenLogVersion) {
+            final int ver = version;
+            new AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.title_whats_new, version))
+                    .setMessage(logText)
+                    .setCancelable(false)
+                    .setPositiveButton(getString(R.string.btn_great), new DialogInterface.OnClickListener() {
+                        @Override public void onClick(DialogInterface dialog, int which) {
+                            getSharedPreferences("ResoNodePrefs", MODE_PRIVATE).edit().putInt("last_changelog_seen", ver).apply();
+                            dialog.dismiss();
+                        }
+                    }).show();
+        }
+    }
+
+    private void downloadAndInstallUpdate() {
+        Toast.makeText(this, getString(R.string.toast_downloading_update_background), Toast.LENGTH_LONG).show();
+
+        final android.app.NotificationManager notificationManager = (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        final String channelId = "UpdateChannel";
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            android.app.NotificationChannel channel = new android.app.NotificationChannel(
+                    channelId, getString(R.string.channel_updates_name), android.app.NotificationManager.IMPORTANCE_HIGH);
+            notificationManager.createNotificationChannel(channel);
+        }
+
+        final androidx.core.app.NotificationCompat.Builder builder = new androidx.core.app.NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(getString(R.string.notif_downloading_app))
+                .setContentText(getString(R.string.notif_calculating_size))
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setProgress(100, 0, false);
+
+        final int notificationId = 999;
+        notificationManager.notify(notificationId, builder.build());
+
+        executor.execute(new Runnable() {
+            @Override public void run() {
+                try {
+                    Request request = new Request.Builder().url(Config.SERVER_URL + "/update/download").build();
+                    Response response = client.newCall(request).execute();
+                    if(!response.isSuccessful()) throw new Exception(getString(R.string.error_reading_playlist));
+
+                    long totalBytes = response.body().contentLength();
+                    InputStream is = response.body().byteStream();
+                    File f = new File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "update.apk");
+                    FileOutputStream fos = new FileOutputStream(f);
+
+                    byte[] b = new byte[8192];
+                    int l;
+                    long downloaded = 0;
+                    int lastProgress = 0;
+
+                    if (totalBytes > 0) {
+                        builder.setProgress(100, 0, false);
+                        notificationManager.notify(notificationId, builder.build());
+                    }
+
+                    while((l = is.read(b)) != -1) {
+                        fos.write(b, 0, l);
+                        downloaded += l;
+
+                        if (totalBytes > 0) {
+                            int progress = (int) ((downloaded * 100L) / totalBytes);
+                            if (progress >= lastProgress + 2) {
+                                lastProgress = progress;
+                                builder.setProgress(100, progress, false)
+                                        .setContentText(getString(R.string.progress_percent, progress));
+                                notificationManager.notify(notificationId, builder.build());
+                            }
+                        }
+                    }
+                    fos.close(); is.close();
+                    final File finalF = f;
+
+                    builder.setContentTitle(getString(R.string.notif_download_complete_title))
+                            .setContentText(getString(R.string.notif_ready_to_install))
+                            .setProgress(0, 0, false)
+                            .setOngoing(false);
+                    notificationManager.notify(notificationId, builder.build());
+
+                    mainHandler.post(new Runnable() {
+                        @Override public void run() {
+                            checkPermissionsAndInstall(finalF);
+                        }
+                    });
+
+                } catch(Exception e) {
+                    builder.setContentTitle(getString(R.string.notif_download_error_title))
+                            .setContentText(getString(R.string.notif_download_error_text))
+                            .setProgress(0, 0, false)
+                            .setOngoing(false);
+                    notificationManager.notify(notificationId, builder.build());
+
+                    mainHandler.post(new Runnable() {
+                        @Override public void run() {
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_update_error), Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    private void showUpdateDialog(int version) {
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.title_new_version_available, version))
+                .setMessage(getString(R.string.msg_update_required))
+                .setCancelable(false)
+                .setPositiveButton(getString(R.string.btn_update), new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface dialog, int which) { downloadAndInstallUpdate(); }
+                })
+                .setNegativeButton(getString(R.string.btn_close), new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface dialog, int which) { finishAffinity(); System.exit(0); }
+                }).show();
+    }
+
+    private void checkPermissionsAndInstall(File f) {
+        pendingApkFile=f;
+        if(Build.VERSION.SDK_INT>=26 && !getPackageManager().canRequestPackageInstalls()) {
+            updatePermissionLauncher.launch(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:"+getPackageName())));
+        } else {
+            finishInstallation(f);
+        }
+    }
+
+    private void finishInstallation(File f) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            Uri uri = FileProvider.getUriForFile(this, getPackageName()+".provider", f);
+            intent.setDataAndType(uri, "application/vnd.android.package-archive");
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(intent);
+        } catch(Exception e){}
+    }
+
+    private void deleteOfflinePlaylist(final MusicItem item) {
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.title_delete_downloads))
+                .setMessage(getString(R.string.msg_delete_downloads_confirm, item.getName()))
+                .setPositiveButton(getString(R.string.btn_delete), new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        List<String> files = offlineDB.getPlaylistFilePaths(item.getName());
+
+                        for (String path : files) {
+                            File f = new File(path);
+                            if (f.exists()) f.delete();
+                        }
+
+                        File privateDir = getDir("offline_music", Context.MODE_PRIVATE);
+                        String safeCoverName = "cover_" + item.getName().replaceAll("[^a-zA-Z0-9.-]", "_") + ".jpg";
+                        File cover = new File(privateDir, safeCoverName);
+                        if (cover.exists()) cover.delete();
+
+                        offlineDB.deletePlaylist(item.getName());
+
+                        Toast.makeText(MainActivity.this, getString(R.string.toast_downloads_deleted), Toast.LENGTH_SHORT).show();
+                        adapter.notifyDataSetChanged();
+                    }
+                })
+                .setNegativeButton(getString(R.string.btn_cancel), null)
+                .show();
+    }
+
+    private void handleNetworkChange(boolean isConnected) {
+        if (isLocalMode) return;
+        if (lastKnownConnectionState != null && lastKnownConnectionState == isConnected && !isConfirmedOffline && !needsUrlRefresh) {
+            return;
+        }
+        lastKnownConnectionState = isConnected;
+
+        try { client.connectionPool().evictAll(); } catch (Exception ignored) {}
+
+        if (isConnected) {
+            isConfirmedOffline = false;
+            isRetryingConnection = false;
+            tvStatus.setVisibility(View.GONE);
+
+            mainHandler.postDelayed(() -> {
+                if (!NetworkReceiver.isConnected(MainActivity.this)) return;
+
+                if (session.hasInvitationCode()) {
+                    UrlFetcher.fetchLatestUrl(session.getInvitationCode(), new UrlFetcher.UrlCallback() {
+                        @Override
+                        public void onUrlFound(String url) {
+                            Config.SERVER_URL = url;
+                            getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
+                                    .edit().putString("last_server_url", url).apply();
+                            isConfirmedOffline = false;
+                            isRetryingConnection = false;
+                            needsUrlRefresh = false;
+                            runOnUiThread(() -> {
+                                tvStatus.setVisibility(View.GONE);
+                                fetchMusicContent(Config.SERVER_URL, currentPath);
+                                if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
+                            });
+                        }
+                        @Override
+                        public void onError(Exception e) {
+                            runOnUiThread(() -> refreshCurrentContent());
+                        }
+                    });
+                } else {
+                    refreshCurrentContent();
+                }
+            }, 1500);
+        } else {
+            tvStatus.setText(getString(R.string.status_offline_mode));
+            tvStatus.setVisibility(View.VISIBLE);
+        }
+    }
+    private void refreshCurrentContent() {
+        needsUrlRefresh = false;
+
+        boolean isSingleSharedSongPreview = isSharedPreview
+                && musicList.size() == 1
+                && !musicList.get(0).isFolder();
+
+        if (!isSingleSharedSongPreview) {
+            fetchMusicContent(Config.SERVER_URL, currentPath);
+        }
+    }
+
+    private void checkAndUninstallOldApp(final String oldPackageName, final int messageResId) {
+        if (oldPackageName.equals(getPackageName())) return;
+
+        if (isPackageInstalled(oldPackageName, getPackageManager())) {
+
+            new AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.title_critical_update))
+                    .setMessage(getString(messageResId))
+                    .setCancelable(false)
+                    .setPositiveButton(getString(R.string.btn_uninstall_now), new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            try {
+                                Uri packageUri = Uri.parse("package:" + oldPackageName);
+                                Intent intent = new Intent(Intent.ACTION_UNINSTALL_PACKAGE);
+                                intent.setData(packageUri);
+                                intent.putExtra(Intent.EXTRA_RETURN_RESULT, true);
+                                startActivity(intent);
+                            } catch (Exception e) {
+                                try {
+                                    Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                                    intent.setData(Uri.parse("package:" + oldPackageName));
+                                    startActivity(intent);
+                                    Toast.makeText(MainActivity.this, getString(R.string.toast_press_uninstall_button), Toast.LENGTH_LONG).show();
+                                } catch (Exception ex) {
+                                    Toast.makeText(MainActivity.this, getString(R.string.toast_uninstaller_error), Toast.LENGTH_LONG).show();
+                                }
+                            }
+                        }
+                    })
+                    .setNegativeButton(getString(R.string.btn_close), new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                        }
+                    })
+                    .show();
+        }
+    }
+
+    private boolean isPackageInstalled(String packageName, PackageManager packageManager) {
+        try {
+            packageManager.getPackageInfo(packageName, 0);
+            return true;
+        } catch (PackageManager.NameNotFoundException e) {
+            return false;
+        }
+    }
+
+    private void updatePlayerIcons() {
+        SharedPreferences prefs = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE);
+        String playStyle = prefs.getString("play_style", "hud");
+        String navStyle = prefs.getString("nav_style", "hud");
+        String colorKey = prefs.getString("icon_color", "resonode");
+
+        switch (playStyle) {
+            case "hex": playIconRes = R.drawable.ic_play_hex; pauseIconRes = R.drawable.ic_pause_hex; break;
+            case "glitch": playIconRes = R.drawable.ic_play_glitch; pauseIconRes = R.drawable.ic_pause_glitch; break;
+            case "original": playIconRes = android.R.drawable.ic_media_play; pauseIconRes = android.R.drawable.ic_media_pause; break;
+            default: playIconRes = R.drawable.ic_play_hud; pauseIconRes = R.drawable.ic_pause_hud; break;
+        }
+
+        int nextIconRes, prevIconRes;
+        switch (navStyle) {
+            case "hex": nextIconRes = R.drawable.ic_next_hex; prevIconRes = R.drawable.ic_prev_hex; break;
+            case "glitch": nextIconRes = R.drawable.ic_next_glitch; prevIconRes = R.drawable.ic_prev_glitch; break;
+            case "original": nextIconRes = android.R.drawable.ic_media_next; prevIconRes = android.R.drawable.ic_media_previous; break;
+            default: nextIconRes = R.drawable.ic_next_hud; prevIconRes = R.drawable.ic_prev_hud; break;
+        }
+        if (btnNext != null) btnNext.setImageResource(nextIconRes);
+        if (btnPrev != null) btnPrev.setImageResource(prevIconRes);
+
+        int tintColor;
+        switch (colorKey) {
+            case "white": tintColor = 0xFFFFFFFF; break;
+            case "green": tintColor = 0xFF1DB954; break;
+            case "cyan": tintColor = 0xFF03F8A7; break;
+            case "cyber_yellow": tintColor = 0xFFFCEE09; break;
+            case "cyber_red": tintColor = 0xFFFF003C; break;
+            default: tintColor = 0xFFF2B327; break;
+        }
+        currentTintColor = tintColor;
+
+        if (btnAddShared != null) {
+            btnAddShared.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+        }
+        if (btnPlay != null) btnPlay.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+        if (btnNext != null) btnNext.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+        if (btnPrev != null) btnPrev.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+        if (btnClosePlayer != null) {
+            btnClosePlayer.setImageResource(playIconRes);
+            btnClosePlayer.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+        }
+        if (seekBar != null) {
+            try {
+                android.graphics.drawable.Drawable progressDrawable = seekBar.getProgressDrawable().mutate();
+                progressDrawable.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+                seekBar.setProgressDrawable(progressDrawable);
+
+                if (Build.VERSION.SDK_INT >= 16) {
+                    android.graphics.drawable.Drawable thumb = seekBar.getThumb().mutate();
+                    thumb.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+                    seekBar.setThumb(thumb);
+                }
+            } catch (Exception e) {}
+        }
+
+        TextView tvTitle = findViewById(R.id.tv_custom_title);
+        if (tvTitle != null) {
+            tvTitle.setTextColor(tintColor);
+        }
+
+        if (fabAdd != null) {
+            fabAdd.setBackgroundTintList(android.content.res.ColorStateList.valueOf(tintColor));
+        }
+
+        if (tvToolbarAction != null) {
+            tvToolbarAction.setTextColor(tintColor);
+        }
+
+        if (btnBulkMore != null) {
+            btnBulkMore.setColorFilter(tintColor, android.graphics.PorterDuff.Mode.SRC_IN);
+        }
+
+        if (swipeRefresh != null) {
+            swipeRefresh.setColorSchemeColors(tintColor);
+        }
+
+        if (adapter != null) {
+            adapter.setIconColor(tintColor);
+        }
+
+        boolean isPlaying = false;
+        if (isBound && musicService != null) isPlaying = musicService.isPlaying();
+        updatePlayIcons(isPlaying);
+    }
+    private void updatePlayIcons(boolean isPlaying) {
+        int resId = isPlaying ? pauseIconRes : playIconRes;
+        if (btnPlay != null) btnPlay.setImageResource(resId);
+    }
+
+    private String[] getAudioMetadata(Uri uri) {
+        String title = getString(R.string.unknown_file);
+        String artist = getString(R.string.local_device);
+        android.media.MediaMetadataRetriever retriever = new android.media.MediaMetadataRetriever();
+        try {
+            retriever.setDataSource(this, uri);
+            String metaTitle = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE);
+            String metaArtist = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST);
+
+            if (metaTitle != null && !metaTitle.trim().isEmpty()) {
+                title = metaTitle;
+            } else {
+                android.database.Cursor cursor = getContentResolver().query(uri, null, null, null, null);
+                if (cursor != null && cursor.moveToFirst()) {
+                    int nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                    if (nameIndex != -1) title = cursor.getString(nameIndex);
+                    cursor.close();
+                }
+            }
+            if (metaArtist != null && !metaArtist.trim().isEmpty()) {
+                artist = metaArtist;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            try { retriever.release(); } catch (Exception e) {}
+        }
+        return new String[]{title, artist};
+    }
+
+    private void handlePendingIntent() {
+        if (pendingIntentToHandle != null && Intent.ACTION_VIEW.equals(pendingIntentToHandle.getAction())) {
+            Uri data = pendingIntentToHandle.getData();
+            if (data != null) {
+
+                if ( (("http".equals(data.getScheme()) || "https".equals(data.getScheme())) && "resonode.app".equals(data.getHost())) ||
+                        ("resonode".equals(data.getScheme()) && "share".equals(data.getHost())) ) {
+
+                    final String token = data.getQueryParameter("token");
+                    if (token != null && !token.isEmpty()) {
+                        resolveSharedToken(token);
+                    }
+                }
+                else if (isBound && musicService != null) {
+                    String[] meta = getAudioMetadata(data);
+                    String title = meta[0];
+                    String artist = meta[1];
+
+                    MusicItem externalItem = new MusicItem(title, "file", data.toString(), artist);
+                    List<MusicItem> temp = new ArrayList<>();
+                    temp.add(externalItem);
+                    currentSongIndex = 0;
+                    musicService.playUrl(data.toString(), temp, 0, session.getUsername());
+
+                    if (playerRoot != null && !isPlayerExpanded) {
+                        fullSet.applyTo(playerRoot);
+                        isPlayerExpanded = true;
+                    }
+                }
+            }
+            pendingIntentToHandle = null;
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        pendingIntentToHandle = intent;
+        handlePendingIntent();
+    }
+
+    @Override
+    public void onConfigurationChanged(@NonNull android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+
+        boolean wasFullPlayerOpen = isPlayerExpanded;
+        int currentAdapterMode = (adapter != null) ? adapter.getMode() : PlaylistAdapter.MODE_PRIVATE;
+
+        setContentView(R.layout.activity_main);
+
+        if (seekBarHandler != null) seekBarHandler.removeCallbacksAndMessages(null);
+
+        setupUI();
+        setupPlayer();
+        updatePlayerIcons();
+        applyPureBlackTheme();
+
+        if (adapter != null) adapter.setMode(currentAdapterMode);
+
+        if (wasFullPlayerOpen && playerRoot != null) {
+            isPlayerExpanded = true;
+            playerRoot.setVisibility(View.VISIBLE);
+            playerRoot.post(() -> applyPlayerState(true, false));
+        }
+
+        if (isBound && musicService != null && musicService.getCurrentSong() != null) {
+            updatePlayerUI(musicService.getCurrentSong(), musicService.isPlaying());
+
+            if (adapter != null) {
+                adapter.setPlayingState(musicService.getCurrentSong().getPath(), musicService.isPlaying());
+            }
+        }
+
+        boolean isVault = (currentAdapterMode == PlaylistAdapter.MODE_VAULT);
+        updateTitleAndFab(currentPath, isVault);
+        updateHeaderImage();
+        if (drawerLayout != null) {
+            androidx.core.view.ViewCompat.requestApplyInsets(drawerLayout);
+        }
+    }
+
+    private void applyPlayerState(boolean expand, boolean animate) {
+        if (animate) {
+            androidx.transition.TransitionSet set = new androidx.transition.TransitionSet()
+                    .addTransition(new androidx.transition.ChangeBounds())
+                    .addTransition(new androidx.transition.Fade().setDuration(200))
+                    .setDuration(450);
+            androidx.transition.TransitionManager.beginDelayedTransition(playerRoot, set);
+        }
+
+        float density = getResources().getDisplayMetrics().density;
+
+        if (expand) {
+            fullSet.constrainWidth(R.id.btn_play, (int) (100 * density));
+            fullSet.constrainHeight(R.id.btn_play, (int) (100 * density));
+            fullSet.constrainWidth(R.id.btn_next, (int) (50 * density));
+            fullSet.constrainHeight(R.id.btn_next, (int) (50 * density));
+            fullSet.constrainWidth(R.id.btn_prev, (int) (50 * density));
+            fullSet.constrainHeight(R.id.btn_prev, (int) (50 * density));
+
+            fullSet.applyTo(playerRoot);
+
+            btnPlay.setPadding(0, 0, 0, 0);
+            btnPlay.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            btnNext.setPadding(0, 0, 0, 0);
+            btnNext.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            btnPrev.setPadding(0, 0, 0, 0);
+            btnPrev.setScaleType(ImageView.ScaleType.FIT_CENTER);
+
+            tvTitle.setTextSize(21);
+            tvArtist.setTextSize(15);
+            tvCurrentTime.setTextSize(14);
+            tvTotalTime.setTextSize(14);
+
+            if (btnAddShared != null) {
+                btnAddShared.setVisibility(isSharedPreview ? View.VISIBLE : View.GONE);
+            }
+
+        } else {
+            miniSet.constrainWidth(R.id.btn_play, (int) (50 * density));
+            miniSet.constrainHeight(R.id.btn_play, (int) (50 * density));
+            miniSet.constrainWidth(R.id.btn_next, (int) (50 * density));
+            miniSet.constrainHeight(R.id.btn_next, (int) (50 * density));
+
+            miniSet.applyTo(playerRoot);
+
+            int miniPadding = (int) (8 * density);
+            btnPlay.setPadding(miniPadding, miniPadding, miniPadding, miniPadding);
+            btnNext.setPadding(miniPadding, miniPadding, miniPadding, miniPadding);
+            btnPrev.setPadding(miniPadding, miniPadding, miniPadding, miniPadding);
+
+            tvTitle.setTextSize(14);
+            tvArtist.setTextSize(11);
+            tvCurrentTime.setTextSize(11);
+            tvTotalTime.setTextSize(11);
+
+            if (btnAddShared != null) {
+                btnAddShared.setVisibility(View.GONE);
+            }
+        }
+        playerRoot.requestLayout();
+    }
+
+    private void showPlaylistSelectorForLocalSong(final Uri audioUri, final String title, final String artist) {
+        executor.execute(new Runnable() {
+            @Override public void run() {
+                try {
+                    Response r = client.newCall(new Request.Builder().url(Config.SERVER_URL + "/browse?username=" + session.getUsername() + "&folder=").build()).execute();
+                    if(r.isSuccessful()) {
+                        JSONArray a = new JSONObject(r.body().string()).getJSONArray("items");
+                        final List<String> pList = new ArrayList<>();
+                        for (int x = 0; x < a.length(); x++) {
+                            if (a.getJSONObject(x).getString("type").equals("folder")) {
+                                pList.add(a.getJSONObject(x).getString("name"));
+                            }
+                        }
+
+                        PlaylistOrder.sortNames(pList);
+
+                        mainHandler.post(new Runnable() {
+                            @Override public void run() {
+                                if (pList.isEmpty()) {
+                                    Toast.makeText(MainActivity.this, getString(R.string.msg_create_playlist_first), Toast.LENGTH_LONG).show();
+                                    return;
+                                }
+
+                                new AlertDialog.Builder(MainActivity.this)
+                                        .setTitle(getString(R.string.title_new_playlist_name))
+                                        .setItems(pList.toArray(new String[0]), new DialogInterface.OnClickListener() {
+                                            @Override public void onClick(DialogInterface d, int w) {
+                                                String selectedPlaylist = pList.get(w);
+
+                                                offlineDB.saveSong(audioUri.toString(), title, selectedPlaylist, audioUri.toString(), artist);
+                                                Toast.makeText(MainActivity.this, getString(R.string.toast_added_to_playlist, selectedPlaylist), Toast.LENGTH_SHORT).show();
+
+                                                if (currentPath.equals(selectedPlaylist)) {
+                                                    fetchMusicContent(Config.SERVER_URL, currentPath);
+                                                }
+                                            }
+                                        }).show();
+                            }
+                        });
+                    }
+                } catch(Exception e) {
+                    mainHandler.post(() -> Toast.makeText(MainActivity.this, getString(R.string.error_loading_playlists), Toast.LENGTH_SHORT).show());
+                }
+            }
+        });
+    }
+
+    private void applyPureBlackTheme() {
+        SharedPreferences prefs = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE);
+        boolean isPureBlack = prefs.getBoolean("pure_black", false);
+
+        int bgColor = isPureBlack ? 0xFF000000 : 0xFF121212;
+        int toolbarColor = isPureBlack ? 0xFF000000 : 0xFF191414;
+
+        getWindow().getDecorView().setBackgroundColor(bgColor);
+
+        if (drawerLayout != null) {
+            View mainContent = drawerLayout.getChildAt(0);
+            if (mainContent != null) mainContent.setBackgroundColor(bgColor);
+        }
+
+        Toolbar toolbar = findViewById(R.id.toolbar);
+        if (toolbar != null) toolbar.setBackgroundColor(toolbarColor);
+
+        NavigationView navView = findViewById(R.id.nav_view);
+        if (navView != null) {
+            navView.setBackgroundColor(bgColor);
+            if (navView.getHeaderCount() > 0) {
+                View header = navView.getHeaderView(0);
+                if (header != null) header.setBackgroundColor(bgColor);
+            }
+        }
+
+        View bgMini = findViewById(R.id.bg_mini);
+        if (bgMini != null) {
+            if (bgMini.getBackground() != null) {
+                androidx.core.view.ViewCompat.setBackgroundTintList(bgMini, android.content.res.ColorStateList.valueOf(toolbarColor));
+            } else {
+                bgMini.setBackgroundColor(toolbarColor);
+            }
+        }
+        if (recyclerView != null) recyclerView.setBackgroundColor(0x00000000);
+    }
+
+    private void sharePlaylist(final MusicItem playlist) {
+        Toast.makeText(this, getString(R.string.toast_generating_link), Toast.LENGTH_SHORT).show();
+
+        executor.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    JSONObject json = new JSONObject();
+                    json.put("username", session.getUsername());
+                    json.put("path", playlist.getPath());
+
+                    RequestBody body = RequestBody.create(MediaType.parse("application/json"), json.toString());
+                    Request request = new Request.Builder()
+                            .url(Config.SERVER_URL + "/share/create")
+                            .header("x-secret-key", Config.API_SECRET_KEY)
+                            .post(body)
+                            .build();
+
+                    Response response = client.newCall(request).execute();
+
+                    if (response.isSuccessful()) {
+                        String resStr = response.body().string();
+                        JSONObject resJson = new JSONObject(resStr);
+                        final String token = resJson.getString("token");
+                        final String shareLink = "http://resonode.app/share?token=" + token;
+
+                        mainHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                Intent sendIntent = new Intent();
+                                sendIntent.setAction(Intent.ACTION_SEND);
+
+                                String missatge = getString(R.string.share_message_template, playlist.getName(), shareLink);
+
+                                sendIntent.putExtra(Intent.EXTRA_TEXT, missatge);
+                                sendIntent.setType("text/plain");
+                                startActivity(Intent.createChooser(sendIntent, getString(R.string.chooser_share_with)));
+                            }
+                        });
+                    } else {
+                        mainHandler.post(() -> Toast.makeText(MainActivity.this, getString(R.string.toast_server_error_share), Toast.LENGTH_SHORT).show());
+                    }
+                } catch (Exception e) {
+                    mainHandler.post(() -> Toast.makeText(MainActivity.this, getString(R.string.error_connection_generic), Toast.LENGTH_SHORT).show());
+                }
+            }
+        });
+    }
+
+    private void resolveSharedToken(final String token) {
+        ProgressDialog pd = new ProgressDialog(this);
+        pd.setMessage(getString(R.string.progress_opening_preview));
+        pd.show();
+        executor.execute(() -> {
+            try {
+                Request req = new Request.Builder().url(Config.SERVER_URL + "/share/resolve?token=" + token).build();
+                Response res = client.newCall(req).execute();
+                if (res.isSuccessful()) {
+                    JSONObject json = new JSONObject(res.body().string());
+                    String type = json.getString("type");
+                    final String owner = json.getString("owner");
+                    final String path = json.getString("path");
+                    final String name = json.getString("name");
+                    final String artist = json.optString("artist", getString(R.string.unknown_artist));
+
+                    mainHandler.post(() -> {
+                        pd.dismiss();
+                        isSharedPreview = true;
+                        sharedOwner = owner;
+                        sharedToken = token;
+
+                        if (type.equals("file")) {
+                            MusicItem item = new MusicItem(name, "file", path, artist);
+                            musicList.clear();
+                            musicList.add(item);
+                            currentPath = name;
+
+                            adapter.setCurrentPath(currentPath);
+                            adapter.setMode(PlaylistAdapter.MODE_SHARED);
+                            updateTitleAndFab(getString(R.string.title_shared), false);
+
+                            currentSongIndex = 0;
+                            playServiceStream(item);
+                            if (!isPlayerExpanded) {
+                                isPlayerExpanded = true;
+                                applyPlayerState(true, true);
+                            }
+                        } else {
+                            fetchMusicContent(Config.SERVER_URL, path);
+                        }
+                    });
+                } else {
+                    mainHandler.post(() -> { pd.dismiss(); Toast.makeText(MainActivity.this, getString(R.string.toast_invalid_expired_link), Toast.LENGTH_SHORT).show(); });
+                }
+            } catch (Exception e) {
+                mainHandler.post(() -> { pd.dismiss(); Toast.makeText(MainActivity.this, getString(R.string.error_network), Toast.LENGTH_SHORT).show(); });
+            }
+        });
+    }
+
+    private void showAddToPlaylistDialogForShared(final List<MusicItem> l) {
+        executor.execute(() -> {
+            try {
+                Response r=client.newCall(new Request.Builder().url(Config.SERVER_URL+"/browse?username="+session.getUsername()+"&folder=").build()).execute();
+                if(r.isSuccessful()){
+                    JSONArray a=new JSONObject(r.body().string()).getJSONArray("items");
+                    final List<String> n=new ArrayList<>();
+                    n.add(getString(R.string.item_new_ellipsis));
+                    for(int x=0;x<a.length();x++) if(a.getJSONObject(x).getString("type").equals("folder")) n.add(a.getJSONObject(x).getString("name"));
+                    PlaylistOrder.sortNames(n.subList(1, n.size()));
+                    mainHandler.post(() -> {
+                        new AlertDialog.Builder(MainActivity.this).setItems(n.toArray(new String[0]), (d, w) -> {
+                            if(w==0) showCreatePlaylistForSharedAddDialog(l);
+                            else addSharedSongsToPlaylist(n.get(w), l);
+                        }).show();
+                    });
+                }
+            }catch(Exception e){}
+        });
+    }
+
+    private void showCreatePlaylistForSharedAddDialog(final List<MusicItem> s) {
+        EditText i = new EditText(this);
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.title_playlist_name))
+                .setView(i)
+                .setPositiveButton(getString(R.string.btn_ok), (d, w) -> {
+                    JSONObject j=new JSONObject();
+                    try{ j.put("username",session.getUsername()); j.put("playlist_name",i.getText().toString()); }catch(Exception e){}
+                    postJson("/playlist/create", j.toString(), () -> addSharedSongsToPlaylist(i.getText().toString(), s));
+                }).show();
+    }
+
+    private void addSharedSongsToPlaylist(final String playlistName, List<MusicItem> s) {
+        final JSONObject j = new JSONObject();
+        final JSONArray a = new JSONArray();
+        for (MusicItem m : s) { a.put(new File(m.getPath()).getName()); }
+        try {
+            j.put("token", sharedToken);
+            j.put("target_username", session.getUsername());
+            j.put("target_playlist", playlistName);
+            j.put("items", a);
+        } catch (Exception e) {}
+
+        final int total = s.size();
+        executor.execute(() -> {
+            try {
+                RequestBody body = RequestBody.create(MediaType.parse("application/json"), j.toString());
+                Request request = new Request.Builder()
+                        .url(Config.SERVER_URL + "/share/import_items")
+                        .header("x-secret-key", Config.API_SECRET_KEY)
+                        .post(body)
+                        .build();
+                try (Response r = client.newCall(request).execute()) {
+                    final boolean ok = r.isSuccessful();
+                    int added = 0;
+                    if (ok && r.body() != null) {
+                        try { added = new JSONObject(r.body().string()).optInt("added", 0); } catch (Exception ignored) {}
+                    }
+                    final int fAdded = added;
+                    mainHandler.post(() -> {
+                        adapter.setSelectionMode(false);
+                        if (!ok || fAdded == 0) {
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_import_failed), Toast.LENGTH_LONG).show();
+                        } else if (fAdded < total) {
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_import_partial, fAdded, total, playlistName), Toast.LENGTH_LONG).show();
+                        } else {
+                            Toast.makeText(MainActivity.this, getString(R.string.toast_songs_imported_to, playlistName), Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                mainHandler.post(() -> Toast.makeText(MainActivity.this, getString(R.string.error_network), Toast.LENGTH_SHORT).show());
+            }
+        });
+    }
+
+    private void checkAndRequestAppLinks() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            try {
+                android.content.SharedPreferences prefs = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE);
+                boolean ignoreAppLinks = prefs.getBoolean("ignore_app_links", false);
+                if (ignoreAppLinks) return;
+
+                android.content.pm.verify.domain.DomainVerificationManager manager =
+                        getSystemService(android.content.pm.verify.domain.DomainVerificationManager.class);
+
+                if (manager != null) {
+                    android.content.pm.verify.domain.DomainVerificationUserState userState =
+                            manager.getDomainVerificationUserState(getPackageName());
+
+                    boolean isVerified = false;
+                    java.util.Map<String, Integer> hostMap = userState.getHostToStateMap();
+
+                    String domain = "resonode.app";
+
+                    if (hostMap.containsKey(domain)) {
+                        int state = hostMap.get(domain);
+
+                        isVerified = (state == android.content.pm.verify.domain.DomainVerificationUserState.DOMAIN_STATE_VERIFIED ||
+                                state == android.content.pm.verify.domain.DomainVerificationUserState.DOMAIN_STATE_SELECTED);
+                    }
+
+                    if (!isVerified) {
+                        new AlertDialog.Builder(this)
+                                .setTitle(getString(R.string.title_enable_direct_links))
+                                .setMessage(getString(R.string.msg_enable_direct_links, domain))
+                                .setCancelable(false)
+                                .setPositiveButton(getString(R.string.btn_configure_now), new DialogInterface.OnClickListener() {
+                                    @Override
+                                    public void onClick(DialogInterface dialog, int which) {
+                                        Intent intent = new Intent(android.provider.Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS);
+                                        intent.setData(Uri.parse("package:" + getPackageName()));
+                                        startActivity(intent);
+                                    }
+                                })
+                                .setNegativeButton(getString(R.string.btn_ignore_forever), new DialogInterface.OnClickListener() {
+                                    @Override
+                                    public void onClick(DialogInterface dialog, int which) {
+                                        prefs.edit().putBoolean("ignore_app_links", true).apply();
+                                    }
+                                })
+                                .setNeutralButton(getString(R.string.btn_later), null)
+                                .show();
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private String currentOwnerUsername() {
+        return isSharedPreview ? sharedOwner : session.getUsername();
+    }
+
+    private void addSongsToQueue(List<MusicItem> items, String ownerUsername) {
+        if (!isBound || musicService == null) return;
+        List<MusicItem> songs = new ArrayList<>();
+        for (MusicItem m : items) if (m != null && !m.isFolder()) songs.add(m);
+
+        if (songs.isEmpty()) {
+            Toast.makeText(this, getString(R.string.toast_no_songs_to_queue), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        musicService.addToQueue(songs, ownerUsername);
+
+        String msg = songs.size() == 1
+                ? getString(R.string.toast_added_to_queue)
+                : getString(R.string.toast_added_count_to_queue, songs.size());
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+    }
+
+    private void addFolderToQueue(final MusicItem folder) {
+        if (isOfflineMode()) {
+            if (offlineDB == null) offlineDB = new OfflineDB(this);
+            addSongsToQueue(offlineDB.getSongsInPlaylist(folder.getName()), session.getUsername());
+            return;
+        }
+
+        final String owner = currentOwnerUsername();
+        final boolean includeLocalSongs = !isSharedPreview;
+        final String url = buildServerUrl("/browse", "username", owner, "folder", folder.getPath());
+
+        executor.execute(() -> {
+            try (Response r = client.newCall(new Request.Builder().url(url).build()).execute()) {
+                if (!r.isSuccessful()) throw new Exception("HTTP " + r.code());
+                JSONObject json = new JSONObject(r.body().string());
+                JSONArray items = json.getJSONArray("items");
+
+                final List<MusicItem> songs = new ArrayList<>();
+                for (int i = 0; i < items.length(); i++) {
+                    JSONObject o = items.getJSONObject(i);
+                    if (!"file".equals(o.getString("type"))) continue;
+                    songs.add(new MusicItem(o.getString("name"), "file", o.getString("path"), o.optString("artist", "")));
+                }
+                if (includeLocalSongs) {
+                    for (MusicItem local : offlineDB.getSongsInPlaylist(folder.getName())) {
+                        if (local.getPath().startsWith("content://")) songs.add(local);
+                    }
+                }
+                PlaylistOrder.sort(songs, json.optJSONArray("order"));
+                mainHandler.post(() -> addSongsToQueue(songs, owner));
+            } catch (Exception e) {
+                mainHandler.post(() -> Toast.makeText(MainActivity.this,
+                        getString(R.string.error_loading_playlists), Toast.LENGTH_SHORT).show());
+            }
+        });
+    }
+
+    private void attachSwipeToQueue() {
+        ItemTouchHelper.SimpleCallback swipeCallback = new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.RIGHT) {
+            @Override
+            public boolean onMove(@NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder vh,
+                                  @NonNull RecyclerView.ViewHolder target) {
+                return false;
+            }
+
+            @Override
+            public int getSwipeDirs(@NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder vh) {
+                int pos = vh.getAdapterPosition();
+                if (pos == RecyclerView.NO_POSITION || pos >= musicList.size()) return 0;
+                if (musicList.get(pos).isFolder()) return 0;
+                if (!adapter.getSelectedItems().isEmpty()) return 0;
+                return super.getSwipeDirs(rv, vh);
+            }
+
+            @Override
+            public float getSwipeThreshold(@NonNull RecyclerView.ViewHolder vh) { return 0.35f; }
+
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder vh, int direction) {
+                int pos = vh.getAdapterPosition();
+                if (pos == RecyclerView.NO_POSITION || pos >= musicList.size()) return;
+                addSongsToQueue(Collections.singletonList(musicList.get(pos)), currentOwnerUsername());
+                adapter.notifyItemChanged(pos);
+            }
+
+            @Override
+            public void onChildDraw(@NonNull Canvas c, @NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder vh,
+                                    float dX, float dY, int actionState, boolean isCurrentlyActive) {
+                if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE && dX > 0) {
+                    View row = vh.itemView;
+                    swipePaint.setColor(currentTintColor);
+                    c.drawRect(row.getLeft(), row.getTop(), row.getLeft() + dX, row.getBottom(), swipePaint);
+
+                    int size = (int) (24 * getResources().getDisplayMetrics().density);
+                    Drawable icon = AppCompatResources.getDrawable(MainActivity.this, R.drawable.ic_queue);
+                    if (icon != null && dX > size * 2) {
+                        icon = DrawableCompat.wrap(icon.mutate());
+                        DrawableCompat.setTint(icon, 0xFF000000);
+                        int left = row.getLeft() + size;
+                        int top = row.getTop() + (row.getHeight() - size) / 2;
+                        icon.setBounds(left, top, left + size, top + size);
+                        icon.draw(c);
+                    }
+                }
+                super.onChildDraw(c, rv, vh, dX, dY, actionState, isCurrentlyActive);
+            }
+        };
+        new ItemTouchHelper(swipeCallback).attachToRecyclerView(recyclerView);
+    }
+
+    private void showQueueDialog() {
+        if (!isBound || musicService == null) return;
+
+        View sheet = getLayoutInflater().inflate(R.layout.dialog_queue, null);
+        boolean pureBlack = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE).getBoolean("pure_black", false);
+        sheet.setBackgroundColor(pureBlack ? 0xFF000000 : 0xFF191414);
+
+        RecyclerView rvQueue = sheet.findViewById(R.id.rv_queue);
+        tvQueueEmpty = sheet.findViewById(R.id.tv_queue_empty);
+        rvQueue.setLayoutManager(new LinearLayoutManager(this));
+        queueAdapter = new QueueAdapter(musicService.getQueue());
+        rvQueue.setAdapter(queueAdapter);
+
+        ItemTouchHelper queueHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(
+                ItemTouchHelper.UP | ItemTouchHelper.DOWN,
+                ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
+
+            @Override
+            public boolean isLongPressDragEnabled() { return false; }
+
+            @Override
+            public boolean onMove(@NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder from,
+                                  @NonNull RecyclerView.ViewHolder to) {
+                int f = from.getAdapterPosition(), t = to.getAdapterPosition();
+                if (f == RecyclerView.NO_POSITION || t == RecyclerView.NO_POSITION || queueAdapter == null) return false;
+                queueAdapter.moveItem(f, t);
+                if (isBound && musicService != null) musicService.moveInQueue(f, t);
+                return true;
+            }
+
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder vh, int direction) {
+                int pos = vh.getAdapterPosition();
+                if (pos == RecyclerView.NO_POSITION || queueAdapter == null) return;
+                queueAdapter.removeItem(pos);
+                if (isBound && musicService != null) musicService.removeFromQueue(pos);
+                updateQueueEmptyState();
+            }
+        });
+        queueHelper.attachToRecyclerView(rvQueue);
+        queueAdapter.setDragStarter(queueHelper::startDrag);
+
+        queueDialog = new BottomSheetDialog(this);
+        queueDialog.setContentView(sheet);
+        View container = (View) sheet.getParent();
+        if (container != null) container.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        queueDialog.setOnDismissListener(d -> {
+            queueDialog = null;
+            queueAdapter = null;
+            tvQueueEmpty = null;
+        });
+        updateQueueEmptyState();
+        queueDialog.show();
+    }
+
+    private void refreshQueueDialog() {
+        if (queueAdapter == null || !isBound || musicService == null) return;
+        queueAdapter.setItems(musicService.getQueue());
+        updateQueueEmptyState();
+    }
+
+    private void updateQueueEmptyState() {
+        if (tvQueueEmpty == null || queueAdapter == null) return;
+        tvQueueEmpty.setVisibility(queueAdapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
+    }
+
+    private void pullSettingsOnce() {
+        if (settingsPulled || isLocalMode) return;
+        settingsPulled = true;
+        SettingsSync.pull(getApplicationContext(), new SettingsSync.PullCallback() {
+            @Override
+            public void onLanguageChanged() {
+                if (!isFinishing()) recreate();
+            }
+
+            @Override
+            public void onAvatarChanged() {
+                refreshNavHeaderAvatar();
+            }
+        });
+    }
+
+    private void refreshNavHeaderAvatar() {
+        NavigationView navView = findViewById(R.id.nav_view);
+        if (navView == null || navView.getHeaderCount() == 0) return;
+        ImageView iv = navView.getHeaderView(0).findViewById(R.id.iv_user_profile);
+        String uri = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE).getString(SettingsSync.KEY_PROFILE_URI, null);
+        if (iv != null && uri != null) {
+            Glide.with(this).load(Uri.parse(uri)).placeholder(R.mipmap.ic_launcher).centerCrop().into(iv);
+        }
+    }
+
+    private void openEditPlaylist(MusicItem playlist) {
+        if (isOfflineMode()) {
+            Toast.makeText(this, getString(R.string.toast_edit_needs_connection), Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Intent intent = new Intent(this, EditPlaylistActivity.class);
+        intent.putExtra(EditPlaylistActivity.EXTRA_NAME, playlist.getName());
+        intent.putExtra(EditPlaylistActivity.EXTRA_PATH, playlist.getPath());
+        editPlaylistLauncher.launch(intent);
+    }
+}

@@ -81,7 +81,7 @@
             android:visibility="gone"
             app:buttonTint="#F2B327" />
 
-        <com.example.resonode.MiniEqView
+        <dev.adrialemany.resonode.MiniEqView
             android:id="@+id/eq_anim"
             android:layout_width="20dp"
             android:layout_height="20dp"

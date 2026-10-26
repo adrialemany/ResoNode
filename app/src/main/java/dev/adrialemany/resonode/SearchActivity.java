@@ -1,0 +1,261 @@
+package dev.adrialemany.resonode;
+
+import android.content.Context;
+import android.content.Intent;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.ImageButton;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+public class SearchActivity extends AppCompatActivity {
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase));
+    }
+
+    private static final String SERVER_URL = Config.SERVER_URL;
+    private static final String API_SECRET_KEY = Config.API_SECRET_KEY;
+
+    private EditText etSearch;
+    private ImageButton btnBack;
+    private RecyclerView recyclerSearch;
+    private ProgressBar progressBar;
+    private PlaylistAdapter adapter;
+
+    private TextView tvDefaultTitle;
+    private List<MusicItem> searchResults = new ArrayList<>();
+
+    private final OkHttpClient client = new OkHttpClient.Builder()
+            .addInterceptor(chain -> {
+                Request original = chain.request();
+                Request request = original.newBuilder()
+                        .header("x-secret-key", API_SECRET_KEY)
+                        .method(original.method(), original.body())
+                        .build();
+                return chain.proceed(request);
+            }).build();
+
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_search);
+        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+
+        etSearch = findViewById(R.id.et_search);
+        btnBack = findViewById(R.id.btn_back);
+        recyclerSearch = findViewById(R.id.recycler_search);
+        progressBar = findViewById(R.id.progress_bar_search);
+        tvDefaultTitle = findViewById(R.id.tv_default_title);
+        recyclerSearch.setLayoutManager(new LinearLayoutManager(this));
+
+        android.content.SharedPreferences prefs = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE);
+        boolean isPureBlack = prefs.getBoolean("pure_black", false);
+
+        int bgColor = isPureBlack ? 0xFF000000 : 0xFF121212;
+
+        getWindow().getDecorView().setBackgroundColor(bgColor);
+
+        android.view.ViewGroup contentRoot = findViewById(android.R.id.content);
+        if (contentRoot != null && contentRoot.getChildCount() > 0) {
+            contentRoot.getChildAt(0).setBackgroundColor(bgColor);
+        }
+
+        if (recyclerSearch != null) {
+            recyclerSearch.setBackgroundColor(0x00000000);
+        }
+
+        adapter = new PlaylistAdapter(this, searchResults, PlaylistAdapter.MODE_SEARCH,
+                item -> openContext(item),
+                (item, action) -> {
+                    if (action.equals(getString(R.string.action_add_to_playlist))) {
+                        Intent resultIntent = new Intent();
+                        resultIntent.putExtra("action", "add_to_playlist");
+                        resultIntent.putExtra("path_id", item.getPath());
+                        setResult(RESULT_OK, resultIntent);
+                        finish();
+                        btnBack.setOnClickListener(v -> finish());
+                        fetchAllArtists();
+                        tvDefaultTitle.setVisibility(View.VISIBLE);
+                    }
+                }
+        );
+        recyclerSearch.setAdapter(adapter);
+
+        btnBack.setOnClickListener(v -> finish());
+        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+
+        fetchAllArtists();
+        tvDefaultTitle.setVisibility(View.VISIBLE);
+
+        etSearch.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (s.toString().trim().isEmpty()) {
+                    tvDefaultTitle.setVisibility(View.VISIBLE);
+                    fetchAllArtists();
+                } else {
+                    tvDefaultTitle.setVisibility(View.GONE);
+                    performSearch(s.toString());
+                }
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
+    }
+
+    private void performSearch(String query) {
+        if (query.isEmpty()) return;
+
+        progressBar.setVisibility(View.VISIBLE);
+        JSONObject json = new JSONObject();
+        try { json.put("query", query); } catch(Exception e){}
+
+        executor.execute(() -> {
+            try {
+                RequestBody body = RequestBody.create(MediaType.parse("application/json"), json.toString());
+                Request request = new Request.Builder().url(SERVER_URL + "/search").post(body).build();
+                Response response = client.newCall(request).execute();
+
+                if (response.isSuccessful()) {
+                    JSONObject resJson = new JSONObject(response.body().string());
+                    JSONArray results = resJson.getJSONArray("results");
+
+                    List<MusicItem> temp = new ArrayList<>();
+                    for(int i=0; i<results.length(); i++) {
+                        JSONObject o = results.getJSONObject(i);
+                        String type = o.getString("type");
+                        String path = o.getString("path_id");
+                        String title = o.getString("title");
+                        String artist = o.has("artist") ? o.getString("artist") : "";
+
+                        String displayName = title;
+                        if(type.equals("song")) displayName += " - " + artist;
+                        if(type.equals("album")) displayName += " (" + artist + ")";
+
+
+                        boolean isFolder = type.equals("album") || type.equals("artist");
+
+                        temp.add(new MusicItem(displayName, isFolder ? "folder" : "file", path));
+                    }
+
+                    mainHandler.post(() -> {
+                        searchResults.clear();
+                        searchResults.addAll(temp);
+                        adapter.notifyDataSetChanged();
+                        progressBar.setVisibility(View.GONE);
+                    });
+                }
+            } catch (Exception e) {
+                mainHandler.post(() -> progressBar.setVisibility(View.GONE));
+            }
+        });
+    }
+
+    private void openContext(MusicItem item) {
+        Intent resultIntent = new Intent();
+        resultIntent.putExtra("action", "navigate");
+
+        if (item.isFolder()) {
+            resultIntent.putExtra("path", item.getPath());
+        } else {
+            File f = new File(item.getPath());
+            String parentPath = f.getParent();
+            if (parentPath == null) parentPath = "";
+            parentPath = parentPath.replace("\\", "/");
+
+            resultIntent.putExtra("path", parentPath);
+            resultIntent.putExtra("play_song", f.getName());
+        }
+
+        setResult(RESULT_OK, resultIntent);
+        super.finish();
+        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+    }
+
+    private void fetchAllArtists() {
+        executor.execute(() -> {
+            try {
+                Request request = new Request.Builder()
+                        .url(Config.SERVER_URL + "/vault/artists")
+                        .header("x-secret-key", Config.API_SECRET_KEY)
+                        .get()
+                        .build();
+
+                Response response = client.newCall(request).execute();
+
+                if (response.isSuccessful()) {
+                    String jsonStr = response.body().string();
+                    JSONObject jsonObject = new JSONObject(jsonStr);
+
+                    if (jsonObject.has("results")) {
+                        JSONArray resultsArray = jsonObject.getJSONArray("results");
+
+                        runOnUiThread(() -> {
+                            searchResults.clear();
+                            for (int i = 0; i < resultsArray.length(); i++) {
+                                try {
+                                    JSONObject obj = resultsArray.getJSONObject(i);
+
+                                    String artista = obj.getString("title");
+                                    String itemPath = artista;
+
+                                    MusicItem item = new MusicItem(
+                                            artista,
+                                            "folder",
+                                            itemPath,
+                                            getString(R.string.label_type_artist)
+                                    );
+                                    searchResults.add(item);
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                }
+                            }
+
+                            if (adapter != null) {
+                                adapter.setSelectionMode(false);
+                                adapter.setMode(PlaylistAdapter.MODE_PUBLIC);
+                                adapter.notifyDataSetChanged();
+                            }
+                        });
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+    }
+}

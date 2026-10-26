@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.resonode"
+    namespace = "dev.adrialemany.resonode"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.resonode"
+        applicationId = "dev.adrialemany.resonode"
         minSdk = 19
         targetSdk = 34
         versionCode = 46
@@ -63,6 +63,7 @@ dependencies {
 
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    testImplementation("junit:junit:4.13.2")
 
     implementation("androidx.multidex:multidex:2.0.1")
 
