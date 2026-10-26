@@ -289,4 +289,7 @@
     <string name="title_queue">Queue</string>
     <string name="queue_empty">The queue is empty</string>
     <string name="queue_hint">Drag ≡ to reorder · Swipe to remove</string>
+
+    <string name="label_profile_photo">Profile photo</string>
+    <string name="toast_profile_pic_error">Could not save the photo</string>
 </resources>

@@ -40,6 +40,15 @@
                 android:layout_height="wrap_content"
                 android:visibility="gone"/>
 
+            <ImageView
+                android:id="@+id/iv_wrapped_avatar"
+                android:layout_width="96dp"
+                android:layout_height="96dp"
+                android:layout_marginTop="8dp"
+                android:scaleType="centerCrop"
+                android:contentDescription="@string/label_profile_photo"
+                android:src="@mipmap/ic_launcher" />
+
             <TextView
                 android:id="@+id/tv_total_label"
                 android:layout_width="wrap_content"

@@ -288,4 +288,7 @@
     <string name="title_queue">Cua</string>
     <string name="queue_empty">La cua està buida</string>
     <string name="queue_hint">Arrossega ≡ per a ordenar · Llisca per a llevar</string>
+
+    <string name="label_profile_photo">Foto de perfil</string>
+    <string name="toast_profile_pic_error">No s\'ha pogut guardar la foto</string>
 </resources>

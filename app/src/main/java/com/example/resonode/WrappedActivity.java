@@ -28,6 +28,14 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import android.content.SharedPreferences;
+import android.net.Uri;
+import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.ImageView;
+import androidx.annotation.NonNull;
+import com.bumptech.glide.Glide;
+import java.util.HashMap;
+import java.util.Map;
 
 public class WrappedActivity extends AppCompatActivity {
 
@@ -45,6 +53,8 @@ public class WrappedActivity extends AppCompatActivity {
 
     private String viewingUser;
     private String currentPeriod = "week";
+    private ImageView ivAvatar;
+    private final Map<String, Long> avatarVersionByUser = new HashMap<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,6 +97,8 @@ public class WrappedActivity extends AppCompatActivity {
         tvTotalLabel = findViewById(R.id.tv_total_label);
         llTopSongs = findViewById(R.id.ll_top_songs);
         pbLoading = findViewById(R.id.pb_loading);
+        ivAvatar = findViewById(R.id.iv_wrapped_avatar);
+        updateHeaderAvatar();
         tabLayout = findViewById(R.id.tabs_period);
 
         tabLayout.addTab(tabLayout.newTab().setText(getString(R.string.label_week)));
@@ -132,6 +144,7 @@ public class WrappedActivity extends AppCompatActivity {
                 getSupportActionBar().setTitle(getString(R.string.title_wrapped_of, viewingUser));
             }
         }
+        updateHeaderAvatar();
     }
 
     @Override
@@ -188,11 +201,13 @@ public class WrappedActivity extends AppCompatActivity {
 
                     final List<String> userNames = new ArrayList<>();
                     final List<String> displayNames = new ArrayList<>();
+                    final List<Long> avatarVersions = new ArrayList<>();
 
                     userNames.add(session.getUsername());
                     displayNames.add(getString(R.string.label_my_profile_emoji));
+                    avatarVersions.add(0L);
 
-                    for(int i=0; i<users.length(); i++) {
+                    for (int i = 0; i < users.length(); i++) {
                         JSONObject u = users.getJSONObject(i);
                         String name = u.getString("username");
                         int mins = u.getInt("minutes");
@@ -200,14 +215,31 @@ public class WrappedActivity extends AppCompatActivity {
                         if (!name.equals(session.getUsername())) {
                             userNames.add(name);
                             displayNames.add(getString(R.string.label_user_minutes, name, mins));
+                            avatarVersions.add(u.optLong("avatar_v", 0));
                         }
                     }
 
                     runOnUiThread(() -> {
                         pbLoading.setVisibility(View.GONE);
+                        for (int i = 0; i < userNames.size(); i++) {
+                            avatarVersionByUser.put(userNames.get(i), avatarVersions.get(i));
+                        }
+
+                        ArrayAdapter<String> rows = new ArrayAdapter<String>(WrappedActivity.this,
+                                R.layout.item_community_user, R.id.tv_community_name, displayNames) {
+                            @NonNull
+                            @Override
+                            public View getView(int position, View convertView, @NonNull ViewGroup parent) {
+                                View row = super.getView(position, convertView, parent);
+                                ImageView iv = row.findViewById(R.id.iv_community_avatar);
+                                loadAvatarInto(iv, userNames.get(position), avatarVersions.get(position));
+                                return row;
+                            }
+                        };
+
                         new AlertDialog.Builder(WrappedActivity.this)
                                 .setTitle(getString(R.string.title_community_ranking, getPeriodDisplayName(currentPeriod)))
-                                .setItems(displayNames.toArray(new String[0]), (dialog, which) -> {
+                                .setAdapter(rows, (dialog, which) -> {
                                     viewingUser = userNames.get(which);
                                     updateTitle();
                                     loadStats();
@@ -375,5 +407,31 @@ public class WrappedActivity extends AppCompatActivity {
     public void finish() {
         super.finish();
         overridePendingTransition(R.anim.hold, R.anim.slide_down_exit);
+    }
+
+    private void updateHeaderAvatar() {
+        if (ivAvatar == null || viewingUser == null) return;
+        Long v = avatarVersionByUser.get(viewingUser);
+        loadAvatarInto(ivAvatar, viewingUser, v != null ? v : 0);
+    }
+
+    private void loadAvatarInto(ImageView target, String user, long version) {
+        if (target == null) return;
+        Object model;
+        if (user.equals(session.getUsername())) {
+            String local = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
+                    .getString(SettingsSync.KEY_PROFILE_URI, null);
+            model = local != null ? Uri.parse(local) : R.mipmap.ic_launcher;
+        } else if (version > 0) {
+            model = SettingsSync.avatarUrl(user, session.getUsername(), version);
+        } else {
+            model = R.mipmap.ic_launcher;
+        }
+        Glide.with(this)
+                .load(model)
+                .placeholder(R.mipmap.ic_launcher)
+                .error(R.mipmap.ic_launcher)
+                .circleCrop()
+                .into(target);
     }
 }

@@ -82,20 +82,14 @@ public class SettingsActivity extends AppCompatActivity {
                     Uri imageUri = result.getData().getData();
 
                     if (imageUri != null) {
-                        try {
-                            getContentResolver().takePersistableUriPermission(imageUri,
-                                    Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-
-                        getSharedPreferences("ResoNodePrefs", MODE_PRIVATE)
-                                .edit()
-                                .putString("profile_pic_uri", imageUri.toString())
-                                .apply();
-
-                        loadProfileImage(imageUri.toString());
-                        Toast.makeText(this, getString(R.string.toast_profile_pic_updated), Toast.LENGTH_SHORT).show();
+                        SettingsSync.setNewAvatar(this, imageUri, newUri -> {
+                            if (newUri != null) {
+                                loadProfileImage(newUri);
+                                Toast.makeText(this, getString(R.string.toast_profile_pic_updated), Toast.LENGTH_SHORT).show();
+                            } else {
+                                Toast.makeText(this, getString(R.string.toast_profile_pic_error), Toast.LENGTH_SHORT).show();
+                            }
+                        });
                     }
                 }
             }
@@ -300,6 +294,7 @@ public class SettingsActivity extends AppCompatActivity {
      */
     private void restartAppWithNewLanguage(String languageKey) {
         LocaleHelper.setLocale(this, languageKey);
+        SettingsSync.languageChanged(getApplicationContext());
 
         Intent intent = new Intent(this, MainActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
@@ -459,23 +454,7 @@ public class SettingsActivity extends AppCompatActivity {
     private void updateWrappedConfig(boolean enabled, boolean isPublic) {
         session.setWrappedEnabled(enabled);
         session.setWrappedPublic(isPublic);
-        executor.execute(() -> {
-            try {
-                JSONObject json = new JSONObject();
-                json.put("username", session.getUsername());
-                json.put("enabled", enabled);
-                json.put("is_public", isPublic);
-
-                OkHttpClient client = new OkHttpClient();
-                RequestBody body = RequestBody.create(MediaType.parse("application/json"), json.toString());
-                Request request = new Request.Builder()
-                        .url(Config.SERVER_URL + "/stats/config")
-                        .header("x-secret-key", Config.API_SECRET_KEY)
-                        .post(body)
-                        .build();
-                client.newCall(request).execute();
-            } catch (Exception e) { e.printStackTrace(); }
-        });
+        SettingsSync.wrappedChanged(this);
     }
 
     @Override

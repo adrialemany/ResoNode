@@ -288,4 +288,7 @@
     <string name="title_queue">Cola</string>
     <string name="queue_empty">La cola está vacía</string>
     <string name="queue_hint">Arrastra ≡ para ordenar · Desliza para quitar</string>
+
+    <string name="label_profile_photo">Foto de perfil</string>
+    <string name="toast_profile_pic_error">No se ha podido guardar la foto</string>
 </resources>

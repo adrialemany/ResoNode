@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SplashActivity extends AppCompatActivity {
 
-    private static final long WATCHDOG_TIMEOUT_MS = 2000;
+    private static final long WATCHDOG_TIMEOUT_MS = 2500;
 
     @Override
     protected void attachBaseContext(Context newBase) {

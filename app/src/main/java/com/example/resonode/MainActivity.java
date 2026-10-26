@@ -150,6 +150,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private QueueAdapter queueAdapter;
     private TextView tvQueueEmpty;
 
+    private boolean settingsPulled = false;
+
     private OkHttpClient createClient() {
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
                 .connectTimeout(6, TimeUnit.SECONDS)
@@ -582,6 +584,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                 }
                                 adapter.notifyDataSetChanged();
                                 refreshSharedAddAllButton();
+                                pullSettingsOnce();
                                 if (isBound && musicService != null && musicService.getCurrentSong() != null) {
                                     adapter.setPlayingState(musicService.getCurrentSong().getPath(), musicService.isPlaying());
                                 }
@@ -1515,6 +1518,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private void logoutUser() {
         AppPrefs.setLocalMode(this, false);
+        SettingsSync.clearLocalProfile(this);
         session.logoutUser();
         startActivity(new Intent(this, LoginActivity.class));
         overridePendingTransition(R.anim.fade_in_activity, R.anim.fade_out_activity);
@@ -2930,5 +2934,31 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private void updateQueueEmptyState() {
         if (tvQueueEmpty == null || queueAdapter == null) return;
         tvQueueEmpty.setVisibility(queueAdapter.getItemCount() == 0 ? View.VISIBLE : View.GONE);
+    }
+
+    private void pullSettingsOnce() {
+        if (settingsPulled || isLocalMode) return;
+        settingsPulled = true;
+        SettingsSync.pull(getApplicationContext(), new SettingsSync.PullCallback() {
+            @Override
+            public void onLanguageChanged() {
+                if (!isFinishing()) recreate(); // se vuelve a crear con el idioma nuevo
+            }
+
+            @Override
+            public void onAvatarChanged() {
+                refreshNavHeaderAvatar();
+            }
+        });
+    }
+
+    private void refreshNavHeaderAvatar() {
+        NavigationView navView = findViewById(R.id.nav_view);
+        if (navView == null || navView.getHeaderCount() == 0) return;
+        ImageView iv = navView.getHeaderView(0).findViewById(R.id.iv_user_profile);
+        String uri = getSharedPreferences("ResoNodePrefs", MODE_PRIVATE).getString(SettingsSync.KEY_PROFILE_URI, null);
+        if (iv != null && uri != null) {
+            Glide.with(this).load(Uri.parse(uri)).placeholder(R.mipmap.ic_launcher).centerCrop().into(iv);
+        }
     }
 }

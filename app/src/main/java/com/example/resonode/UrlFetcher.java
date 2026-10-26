@@ -19,6 +19,9 @@ import okhttp3.Dns;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import android.content.Context;
+import android.content.SharedPreferences;
+
 
 public class UrlFetcher {
 
@@ -26,7 +29,15 @@ public class UrlFetcher {
     private static final long RETRY_DELAY_MS = 1500;
     private static final long HARD_WATCHDOG_MS = 15000;
 
-    // Client OkHttp dedicat que prioritza IPv4 per evitar penjats en Dades Mòbils (IPv6/CGNAT)
+    private static final String KEY_LAST_URL = "last_server_url";
+    private static final String KEY_LAST_CODE = "last_server_code";
+
+    private static SharedPreferences prefs;
+    private static volatile long gistBlockedUntil = 0;
+
+    private static class NoRetryException extends Exception {
+        NoRetryException(String msg) { super(msg); }
+    }
     private static final OkHttpClient gistClient = new OkHttpClient.Builder()
             .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(5, TimeUnit.SECONDS)
@@ -48,7 +59,64 @@ public class UrlFetcher {
     }
 
     public static void fetchLatestUrl(String invitationCode, UrlCallback callback) {
-        fetchLatestUrlWithRetry(invitationCode, MAX_RETRIES, callback);
+        new Thread(() -> {
+            try {
+                applySecretKey(invitationCode);
+            } catch (Exception e) {
+                callback.onError(e);
+                return;
+            }
+
+            String known = Config.SERVER_URL;
+            if ((known == null || known.isEmpty()) && prefs != null) known = prefs.getString(KEY_LAST_URL, "");
+            String knownCode = prefs != null ? prefs.getString(KEY_LAST_CODE, null) : null;
+            boolean sameServer = invitationCode.trim().equals(knownCode);
+
+            if (sameServer && known != null && !known.isEmpty() && isServerAlive(known)) {
+                callback.onUrlFound(known);
+                return;
+            }
+
+            if (System.currentTimeMillis() < gistBlockedUntil) {
+                callback.onError(new Exception("GitHub rate limit: esperando al reinicio"));
+                return;
+            }
+
+            fetchLatestUrlWithRetry(invitationCode, MAX_RETRIES, callback);
+        }).start();
+    }
+
+    public static void init(Context ctx) {
+        prefs = ctx.getApplicationContext().getSharedPreferences("ResoNodePrefs", Context.MODE_PRIVATE);
+        if (Config.SERVER_URL == null || Config.SERVER_URL.isEmpty()) {
+            Config.SERVER_URL = prefs.getString(KEY_LAST_URL, "");
+        }
+        try {
+            applySecretKey(new SessionManager(ctx).getInvitationCode());
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static void applySecretKey(String invitationCode) throws Exception {
+        if (invitationCode == null || invitationCode.trim().isEmpty()) {
+            throw new Exception("Codi d'Invitació buit");
+        }
+        String decoded = new String(Base64.decode(invitationCode.trim(), Base64.DEFAULT), "UTF-8");
+        String[] parts = decoded.split("\\|");
+        if (parts.length != 2) throw new Exception("Format de Codi d'Invitació invàlid");
+        Config.API_SECRET_KEY = parts[1].trim();
+    }
+
+    private static boolean isServerAlive(String baseUrl) {
+        Request request = new Request.Builder()
+                .url(baseUrl + "/")
+                .header("Connection", "close")
+                .build();
+        try (Response r = gistClient.newCall(request).execute()) {
+            return r.isSuccessful();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private static void fetchLatestUrlWithRetry(String invitationCode, int retriesLeft, UrlCallback callback) {
@@ -97,6 +165,18 @@ public class UrlFetcher {
                         .build();
 
                 try (Response response = gistClient.newCall(request).execute()) {
+                    if (response.code() == 403 || response.code() == 429) {
+                        long resetMs = System.currentTimeMillis() + 10 * 60_000L;
+                        String reset = response.header("X-RateLimit-Reset");
+                        try {
+                            if (reset != null) resetMs = Long.parseLong(reset) * 1000L;
+                        } catch (NumberFormatException ignored) {}
+                        gistBlockedUntil = resetMs;
+                        throw new NoRetryException("GitHub rate limit");
+                    }
+                    if (response.code() == 404) {
+                        throw new NoRetryException("Gist no encontrado");
+                    }
                     if (!response.isSuccessful() || response.body() == null) {
                         throw new Exception("GitHub HTTP Error: " + response.code());
                     }
@@ -124,6 +204,13 @@ public class UrlFetcher {
                     byte[] decryptedData = cipher.doFinal(cipherText);
                     String finalUrl = new String(decryptedData, "UTF-8").trim();
 
+                    Config.SERVER_URL = finalUrl;
+                    if (prefs != null) {
+                        prefs.edit()
+                                .putString(KEY_LAST_URL, finalUrl)
+                                .putString(KEY_LAST_CODE, invitationCode.trim())
+                                .apply();
+                    }
 
                     if (callbackFired.compareAndSet(false, true)) {
                         watchdog.interrupt();
@@ -132,7 +219,7 @@ public class UrlFetcher {
                 }
 
             } catch (Exception e) {
-                if (retriesLeft > 0) {
+                if (retriesLeft > 0 && !(e instanceof NoRetryException)) {
                     try { Thread.sleep(RETRY_DELAY_MS); } catch (InterruptedException ignored) {}
 
                     watchdog.interrupt();
