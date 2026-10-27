@@ -2581,7 +2581,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                                 Intent sendIntent = new Intent();
                                 sendIntent.setAction(Intent.ACTION_SEND);
 
-                                String missatge = getString(R.string.share_message_template, playlist.getName(), shareLink);
+                                String missatge = playlist.isFolder()
+                                        ? getString(R.string.share_message_template, playlist.getName(), shareLink)
+                                        : getString(R.string.share_message_song, cleanSongName(playlist.getName()), shareLink);
 
                                 sendIntent.putExtra(Intent.EXTRA_TEXT, missatge);
                                 sendIntent.setType("text/plain");
@@ -2993,5 +2995,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         intent.putExtra(EditPlaylistActivity.EXTRA_NAME, playlist.getName());
         intent.putExtra(EditPlaylistActivity.EXTRA_PATH, playlist.getPath());
         editPlaylistLauncher.launch(intent);
+    }
+
+    private String cleanSongName(String raw) {
+        return raw.replaceAll("(?i)\\.mp3$", "")
+                .replaceAll("^(\\d+[\\s_\\-]*)+", "")
+                .trim();
     }
 }

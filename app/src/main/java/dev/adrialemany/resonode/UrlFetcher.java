@@ -22,6 +22,11 @@ import okhttp3.Response;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkInfo;
+import android.os.Build;
+
 
 public class UrlFetcher {
 
@@ -34,6 +39,10 @@ public class UrlFetcher {
 
     private static SharedPreferences prefs;
     private static volatile long gistBlockedUntil = 0;
+
+    private static final String KEY_GIST_OWNER = "gist_owner";
+    private static Context appContext;
+    private static volatile String blockedOnNetwork = null;
 
     private static class NoRetryException extends Exception {
         NoRetryException(String msg) { super(msg); }
@@ -77,8 +86,15 @@ public class UrlFetcher {
                 return;
             }
 
-            if (System.currentTimeMillis() < gistBlockedUntil) {
-                callback.onError(new Exception("GitHub rate limit: esperando al reinicio"));
+            String rawUrl = fetchFromRawGist(invitationCode);
+            if (rawUrl != null && !rawUrl.equals(known) && isServerAlive(rawUrl)) {
+                saveFoundUrl(rawUrl, invitationCode);
+                callback.onUrlFound(rawUrl);
+                return;
+            }
+
+            if (System.currentTimeMillis() < gistBlockedUntil && currentNetworkKey().equals(blockedOnNetwork)) {
+                callback.onError(new Exception("GitHub rate limit en esta red: esperando al reinicio"));
                 return;
             }
 
@@ -87,6 +103,7 @@ public class UrlFetcher {
     }
 
     public static void init(Context ctx) {
+        appContext = ctx.getApplicationContext();
         prefs = ctx.getApplicationContext().getSharedPreferences("ResoNodePrefs", Context.MODE_PRIVATE);
         if (Config.SERVER_URL == null || Config.SERVER_URL.isEmpty()) {
             Config.SERVER_URL = prefs.getString(KEY_LAST_URL, "");
@@ -172,6 +189,7 @@ public class UrlFetcher {
                             if (reset != null) resetMs = Long.parseLong(reset) * 1000L;
                         } catch (NumberFormatException ignored) {}
                         gistBlockedUntil = resetMs;
+                        blockedOnNetwork = currentNetworkKey();
                         throw new NoRetryException("GitHub rate limit");
                     }
                     if (response.code() == 404) {
@@ -204,12 +222,10 @@ public class UrlFetcher {
                     byte[] decryptedData = cipher.doFinal(cipherText);
                     String finalUrl = new String(decryptedData, "UTF-8").trim();
 
-                    Config.SERVER_URL = finalUrl;
-                    if (prefs != null) {
-                        prefs.edit()
-                                .putString(KEY_LAST_URL, finalUrl)
-                                .putString(KEY_LAST_CODE, invitationCode.trim())
-                                .apply();
+                    saveFoundUrl(finalUrl, invitationCode);
+                    JSONObject ownerObj = json.optJSONObject("owner");
+                    if (ownerObj != null && prefs != null) {
+                        prefs.edit().putString(KEY_GIST_OWNER, ownerObj.optString("login", null)).apply();
                     }
 
                     if (callbackFired.compareAndSet(false, true)) {
@@ -232,5 +248,67 @@ public class UrlFetcher {
                 }
             }
         }).start();
+    }
+
+    private static void saveFoundUrl(String url, String invitationCode) {
+        Config.SERVER_URL = url;
+        if (prefs != null) {
+            prefs.edit()
+                    .putString(KEY_LAST_URL, url)
+                    .putString(KEY_LAST_CODE, invitationCode.trim())
+                    .apply();
+        }
+    }
+
+    private static String fetchFromRawGist(String invitationCode) {
+        String owner = prefs != null ? prefs.getString(KEY_GIST_OWNER, null) : null;
+        if (owner == null || owner.isEmpty()) return null;
+        try {
+            String decoded = new String(Base64.decode(invitationCode.trim(), Base64.DEFAULT), "UTF-8");
+            String[] parts = decoded.split("\\|");
+            if (parts.length != 2) return null;
+            String gistId = parts[0].trim();
+            String secretKey = parts[1].trim();
+
+            Request request = new Request.Builder()
+                    .url("https://gist.githubusercontent.com/" + owner + "/" + gistId
+                            + "/raw/resonode_url.json?t=" + System.currentTimeMillis())
+                    .header("Cache-Control", "no-cache")
+                    .header("Connection", "close")
+                    .build();
+            try (Response r = gistClient.newCall(request).execute()) {
+                if (!r.isSuccessful() || r.body() == null) return null;
+                String encrypted = new JSONObject(r.body().string()).getString("url");
+                return decryptUrl(encrypted, secretKey);
+            }
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String decryptUrl(String encryptedB64, String secretKey) throws Exception {
+        byte[] cipherData = Base64.decode(encryptedB64, Base64.DEFAULT);
+        byte[] iv = new byte[16];
+        byte[] cipherText = new byte[cipherData.length - 16];
+        System.arraycopy(cipherData, 0, iv, 0, 16);
+        System.arraycopy(cipherData, 16, cipherText, 0, cipherText.length);
+        byte[] keyBytes = MessageDigest.getInstance("SHA-256").digest(secretKey.getBytes("UTF-8"));
+        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(keyBytes, "AES"), new IvParameterSpec(iv));
+        return new String(cipher.doFinal(cipherText), "UTF-8").trim();
+    }
+
+    private static String currentNetworkKey() {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) appContext.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Network n = cm.getActiveNetwork();
+                return n == null ? "none" : n.toString();
+            }
+            NetworkInfo ni = cm.getActiveNetworkInfo();
+            return ni == null ? "none" : String.valueOf(ni.getType());
+        } catch (Exception e) {
+            return "unknown";
+        }
     }
 }

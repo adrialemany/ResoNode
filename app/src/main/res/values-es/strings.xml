@@ -306,4 +306,5 @@
     <string name="toast_edit_needs_connection">Necesitas conexión para editar la playlist</string>
 
     <string name="msg_old_package_detected">Todavía tienes instalada una versión antigua de ResoNode. Desinstálala para no tener la app dos veces. Revisa la personalización y el Wrapped en Configuración. Tendrás que volver a descargar la música offline.</string>
+    <string name="share_message_song">¡Escucha la canción \"%1$s\" en ResoNode!\n\n%2$s</string>
 </resources>

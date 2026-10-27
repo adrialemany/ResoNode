@@ -293,7 +293,6 @@
     <string name="label_profile_photo">Profile photo</string>
     <string name="toast_profile_pic_error">Could not save the photo</string>
 
-    <!-- Editar playlist -->
     <string name="action_edit_playlist">Edit playlist</string>
     <string name="title_edit_playlist">Edit playlist</string>
     <string name="section_songs">SONGS</string>
@@ -307,4 +306,5 @@
     <string name="toast_edit_needs_connection">You need a connection to edit the playlist</string>
 
     <string name="msg_old_package_detected">An old version of ResoNode is still installed. Uninstall it so you don\'t have the app twice. Check your personalization and ResoNode Wrapped in Settings. You will need to download your offline music again.</string>
+    <string name="share_message_song">Listen to the song \"%1$s\" on ResoNode!\n\n%2$s</string>
 </resources>
